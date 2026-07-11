@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type AdminStudent, type Session } from '../lib/api';
 import {
+  combineLocalDateTime,
   dayEndIso,
   dayStartIso,
   fmtDate,
   fmtDuration,
   fmtTime,
-  isoToLocalInput,
+  isoToLocalDay,
+  isoToTimeInput,
   localDateString,
-  localInputToIso,
   sessionMinutes,
 } from '../lib/format';
 import { ShapeIcon } from '../lib/shapes';
 
-type Editing =
-  | { mode: 'edit'; session: Session }
-  | { mode: 'new' }
-  | null;
+type EditDraft = {
+  id: number;
+  day: string; // local date the punches stay anchored to
+  inTime: string;
+  outTime: string;
+  note: string;
+};
 
 export default function Timesheet() {
   const [from, setFrom] = useState(localDateString(-13));
@@ -24,7 +28,8 @@ export default function Timesheet() {
   const [studentFilter, setStudentFilter] = useState('');
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [students, setStudents] = useState<AdminStudent[]>([]);
-  const [editing, setEditing] = useState<Editing>(null);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -67,12 +72,57 @@ export default function Timesheet() {
     return [...map.values()].sort((a, b) => b.minutes - a.minutes);
   }, [sessions]);
 
+  function startEdit(s: Session) {
+    setError('');
+    setDraft({
+      id: s.id,
+      day: isoToLocalDay(s.clockIn ?? s.clockOut ?? new Date().toISOString()),
+      inTime: isoToTimeInput(s.clockIn),
+      outTime: isoToTimeInput(s.clockOut),
+      note: s.note,
+    });
+  }
+
+  async function saveDraft() {
+    if (!draft) return;
+    setError('');
+    try {
+      await api.updateSession(draft.id, {
+        clockIn: combineLocalDateTime(draft.day, draft.inTime),
+        clockOut: combineLocalDateTime(draft.day, draft.outTime),
+        note: draft.note,
+      });
+      setDraft(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+    }
+  }
+
+  async function clockOutNow(s: Session) {
+    setError('');
+    try {
+      await api.updateSession(s.id, { clockOut: new Date().toISOString() });
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+    }
+  }
+
   async function remove(session: Session) {
     const label = `${session.studentName} on ${fmtDate(session.clockIn ?? session.clockOut ?? '')}`;
     if (!window.confirm(`Delete this entry for ${label}? This can't be undone.`)) return;
     await api.deleteSession(session.id);
     load();
   }
+
+  const draftMinutes =
+    draft && draft.inTime && draft.outTime
+      ? sessionMinutes(
+          combineLocalDateTime(draft.day, draft.inTime),
+          combineLocalDateTime(draft.day, draft.outTime)
+        )
+      : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -114,7 +164,7 @@ export default function Timesheet() {
         <div className="flex gap-2 ml-auto">
           <button
             type="button"
-            onClick={() => setEditing({ mode: 'new' })}
+            onClick={() => setAdding(true)}
             className="bg-rtc-green text-white font-bold rounded-xl px-4 py-2"
           >
             + Add entry
@@ -175,27 +225,94 @@ export default function Timesheet() {
               <th className="p-3">Out</th>
               <th className="p-3">Time worked</th>
               <th className="p-3">Note</th>
-              <th className="p-3">Source</th>
               <th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
             {sessions === null ? (
               <tr>
-                <td colSpan={8} className="p-6 text-center font-bold text-rtc-gray">
+                <td colSpan={7} className="p-6 text-center font-bold text-rtc-gray">
                   Loading…
                 </td>
               </tr>
             ) : sessions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-6 text-center font-bold text-rtc-gray">
+                <td colSpan={7} className="p-6 text-center font-bold text-rtc-gray">
                   No entries in this date range.
                 </td>
               </tr>
             ) : (
               sessions.map((s) => {
+                const isEditing = draft?.id === s.id;
                 const mins = sessionMinutes(s.clockIn, s.clockOut);
                 const anchor = s.clockIn ?? s.clockOut;
+
+                if (isEditing && draft) {
+                  return (
+                    <tr key={s.id} className="border-b border-slate-100 bg-blue-50/60">
+                      <td className="p-3 font-bold whitespace-nowrap">
+                        {anchor ? fmtDate(anchor) : '—'}
+                      </td>
+                      <td className="p-3">
+                        <span className="inline-flex items-center gap-2 font-bold">
+                          <ShapeIcon shape={s.shape} color={s.color} className="w-5 h-5" />
+                          {s.studentName}
+                        </span>
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="time"
+                          autoFocus
+                          value={draft.inTime}
+                          onChange={(e) => setDraft({ ...draft, inTime: e.target.value })}
+                          className="border-2 border-blue-300 rounded-lg px-2 py-1 font-bold w-28"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="time"
+                          value={draft.outTime}
+                          onChange={(e) => setDraft({ ...draft, outTime: e.target.value })}
+                          className="border-2 border-blue-300 rounded-lg px-2 py-1 font-bold w-28"
+                        />
+                      </td>
+                      <td className="p-3 font-bold whitespace-nowrap">
+                        {draftMinutes !== null
+                          ? draftMinutes >= 0
+                            ? fmtDuration(draftMinutes)
+                            : '⚠ out is before in'
+                          : '—'}
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={draft.note}
+                          onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+                          placeholder="note"
+                          className="border-2 border-blue-200 rounded-lg px-2 py-1 w-full min-w-24"
+                        />
+                      </td>
+                      <td className="p-2 whitespace-nowrap text-right">
+                        <button
+                          type="button"
+                          onClick={saveDraft}
+                          disabled={draftMinutes !== null && draftMinutes < 0}
+                          className="bg-rtc-green text-white font-bold rounded-lg px-4 py-1.5 mr-2 disabled:opacity-40"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDraft(null)}
+                          className="font-bold text-rtc-gray"
+                        >
+                          Cancel
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }
+
                 return (
                   <tr key={s.id} className="border-b border-slate-100">
                     <td className="p-3 font-bold whitespace-nowrap">
@@ -218,7 +335,17 @@ export default function Timesheet() {
                       {s.clockOut ? (
                         fmtTime(s.clockOut)
                       ) : (
-                        <span className="text-rtc-green font-bold">● still in</span>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="text-rtc-green font-bold">● still in</span>
+                          <button
+                            type="button"
+                            onClick={() => clockOutNow(s)}
+                            className="bg-rtc-red text-white text-xs font-bold rounded-lg px-2.5 py-1"
+                            title="Set clock-out to right now"
+                          >
+                            Out now
+                          </button>
+                        </span>
                       )}
                     </td>
                     <td className="p-3 font-bold whitespace-nowrap">
@@ -227,11 +354,10 @@ export default function Timesheet() {
                     <td className="p-3 max-w-56 truncate" title={s.note}>
                       {s.note}
                     </td>
-                    <td className="p-3 text-rtc-gray">{s.createdVia}</td>
                     <td className="p-3 whitespace-nowrap text-right">
                       <button
                         type="button"
-                        onClick={() => setEditing({ mode: 'edit', session: s })}
+                        onClick={() => startEdit(s)}
                         className="font-bold text-blue-700 mr-3"
                       >
                         Edit
@@ -252,13 +378,18 @@ export default function Timesheet() {
         </table>
       </div>
 
-      {editing && (
-        <SessionModal
-          editing={editing}
+      <p className="text-xs text-rtc-gray font-bold">
+        Click <span className="text-blue-700">Edit</span> to fix times right in the row — times
+        stay on the same day. Use <span className="text-rtc-red">Out now</span> to close a
+        forgotten clock-out.
+      </p>
+
+      {adding && (
+        <AddEntryModal
           students={students}
-          onClose={() => setEditing(null)}
+          onClose={() => setAdding(false)}
           onSaved={() => {
-            setEditing(null);
+            setAdding(false);
             load();
           }}
         />
@@ -267,24 +398,20 @@ export default function Timesheet() {
   );
 }
 
-function SessionModal({
-  editing,
+function AddEntryModal({
   students,
   onClose,
   onSaved,
 }: {
-  editing: NonNullable<Editing>;
   students: AdminStudent[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const session = editing.mode === 'edit' ? editing.session : null;
-  const [studentId, setStudentId] = useState(
-    session?.studentId ?? students.find((s) => s.active)?.id ?? 0
-  );
-  const [clockIn, setClockIn] = useState(isoToLocalInput(session?.clockIn ?? null));
-  const [clockOut, setClockOut] = useState(isoToLocalInput(session?.clockOut ?? null));
-  const [note, setNote] = useState(session?.note ?? '');
+  const [studentId, setStudentId] = useState(students.find((s) => s.active)?.id ?? 0);
+  const [day, setDay] = useState(localDateString(0));
+  const [inTime, setInTime] = useState('');
+  const [outTime, setOutTime] = useState('');
+  const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -293,20 +420,12 @@ function SessionModal({
     setBusy(true);
     setError('');
     try {
-      if (session) {
-        await api.updateSession(session.id, {
-          clockIn: localInputToIso(clockIn),
-          clockOut: localInputToIso(clockOut),
-          note,
-        });
-      } else {
-        await api.createSession({
-          studentId,
-          clockIn: localInputToIso(clockIn),
-          clockOut: localInputToIso(clockOut),
-          note,
-        });
-      }
+      await api.createSession({
+        studentId,
+        clockIn: combineLocalDateTime(day, inTime),
+        clockOut: combineLocalDateTime(day, outTime),
+        note,
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
@@ -317,53 +436,62 @@ function SessionModal({
   return (
     <div className="fixed inset-0 z-50 bg-[rgba(15,30,45,0.55)] flex items-center justify-center p-4">
       <form onSubmit={save} className="bg-white rounded-3xl shadow-xl p-6 w-full max-w-md flex flex-col gap-4">
-        <h2 className="text-lg font-black text-rtc-green-dark">
-          {session ? `Edit entry — ${session.studentName}` : 'Add a timesheet entry'}
-        </h2>
+        <h2 className="text-lg font-black text-rtc-green-dark">Add a timesheet entry</h2>
 
-        {!session && (
-          <label className="text-sm font-bold flex flex-col gap-1">
-            Student
-            <select
-              value={studentId}
-              onChange={(e) => setStudentId(Number(e.target.value))}
-              className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold bg-white"
-            >
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.active ? '' : ' (inactive)'}
-                </option>
-              ))}
-            </select>
+        <label className="text-sm font-bold flex flex-col gap-1">
+          Student
+          <select
+            value={studentId}
+            onChange={(e) => setStudentId(Number(e.target.value))}
+            className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold bg-white"
+          >
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.active ? '' : ' (inactive)'}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-sm font-bold flex flex-col gap-1">
+          Day
+          <input
+            type="date"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold"
+          />
+        </label>
+
+        <div className="flex gap-3">
+          <label className="text-sm font-bold flex flex-col gap-1 flex-1">
+            Clock in
+            <input
+              type="time"
+              value={inTime}
+              onChange={(e) => setInTime(e.target.value)}
+              className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold"
+            />
           </label>
-        )}
+          <label className="text-sm font-bold flex flex-col gap-1 flex-1">
+            Clock out
+            <input
+              type="time"
+              value={outTime}
+              onChange={(e) => setOutTime(e.target.value)}
+              className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold"
+            />
+          </label>
+        </div>
 
-        <label className="text-sm font-bold flex flex-col gap-1">
-          Clock in
-          <input
-            type="datetime-local"
-            value={clockIn}
-            onChange={(e) => setClockIn(e.target.value)}
-            className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold"
-          />
-        </label>
-        <label className="text-sm font-bold flex flex-col gap-1">
-          Clock out <span className="font-normal text-rtc-gray">(leave empty if still working)</span>
-          <input
-            type="datetime-local"
-            value={clockOut}
-            onChange={(e) => setClockOut(e.target.value)}
-            className="border-2 border-slate-300 rounded-lg px-3 py-2 font-bold"
-          />
-        </label>
         <label className="text-sm font-bold flex flex-col gap-1">
           Note
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. forgot to clock out, left early"
+            placeholder="optional"
             className="border-2 border-slate-300 rounded-lg px-3 py-2"
           />
         </label>
@@ -380,7 +508,7 @@ function SessionModal({
           </button>
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || (!inTime && !outTime)}
             className="bg-rtc-green text-white font-bold rounded-xl px-6 py-2 disabled:opacity-50"
           >
             {busy ? 'Saving…' : 'Save'}

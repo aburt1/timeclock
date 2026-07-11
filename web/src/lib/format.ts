@@ -41,6 +41,27 @@ export function localInputToIso(value: string): string | null {
   return new Date(value).toISOString();
 }
 
+/** ISO string → value for <input type="time"> in the viewer's timezone. */
+export function isoToTimeInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** ISO string → local YYYY-MM-DD. */
+export function isoToLocalDay(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Local day + <input type="time"> value → ISO (null if time empty). */
+export function combineLocalDateTime(day: string, time: string): string | null {
+  if (!time) return null;
+  return new Date(`${day}T${time}:00`).toISOString();
+}
+
 /** Local YYYY-MM-DD for a date offset from today. */
 export function localDateString(offsetDays = 0): string {
   const d = new Date();
