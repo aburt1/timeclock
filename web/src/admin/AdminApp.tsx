@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import Timesheet from './Timesheet';
 import Roster from './Roster';
+import Reports from './Reports';
 
-type Tab = 'timesheet' | 'roster';
+type Tab = 'timesheet' | 'reports' | 'roster';
 
 export default function AdminApp() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -37,6 +38,9 @@ export default function AdminApp() {
           <TabButton active={tab === 'timesheet'} onClick={() => setTab('timesheet')}>
             Timesheet
           </TabButton>
+          <TabButton active={tab === 'reports'} onClick={() => setTab('reports')}>
+            Reports
+          </TabButton>
           <TabButton active={tab === 'roster'} onClick={() => setTab('roster')}>
             Students
           </TabButton>
@@ -55,7 +59,7 @@ export default function AdminApp() {
           Log out
         </button>
       </header>
-      {tab === 'timesheet' ? <Timesheet /> : <Roster />}
+      {tab === 'timesheet' ? <Timesheet /> : tab === 'reports' ? <Reports /> : <Roster />}
     </Shell>
   );
 }
