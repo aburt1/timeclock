@@ -1,0 +1,15 @@
+services:
+  timeclock:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Set ADMIN_PASSWORD in Coolify's environment variables UI
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - timeclock-data:/data
+    restart: unless-stopped
+
+volumes:
+  timeclock-data:

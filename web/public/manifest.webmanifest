@@ -1,0 +1,17 @@
+{
+  "name": "Recycling Time Clock",
+  "short_name": "Time Clock",
+  "description": "Clock in and out of recycling work",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#E3F2FD",
+  "theme_color": "#2E7D32",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

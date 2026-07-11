@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --font-lexend: "Lexend", system-ui, sans-serif;
+  --color-rtc-green: #2e7d32;
+  --color-rtc-green-dark: #1b5e20;
+  --color-rtc-red: #c62828;
+  --color-rtc-red-dark: #8e0000;
+  --color-rtc-ink: #1a2733;
+  --color-rtc-gray: #6b7a87;
+  --color-rtc-sky1: #e3f2fd;
+  --color-rtc-sky2: #bbdefb;
+}
+
+body {
+  font-family: var(--font-lexend);
+  color: var(--color-rtc-ink);
+}
+
+button {
+  font-family: var(--font-lexend);
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 4px solid #ffc107;
+  outline-offset: 3px;
+}
