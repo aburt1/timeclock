@@ -1,8 +1,11 @@
 services:
   timeclock:
     build: .
-    ports:
-      - "3000:3000"
+    # No host port mapping — Coolify's proxy (Traefik) routes the domain to
+    # the container port directly. For a local prod-style run use:
+    #   docker compose run --service-ports -p 3000:3000 ... (or just `npm start`)
+    expose:
+      - "3000"
     environment:
       # Set ADMIN_PASSWORD in Coolify's environment variables UI
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
