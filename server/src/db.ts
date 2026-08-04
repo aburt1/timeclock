@@ -41,16 +41,18 @@ db.exec(`
   );
 `);
 
+// Example roster for a fresh install — replace with your own students on the
+// admin page. Seeding only happens when the database is empty.
 const SEED_STUDENTS: ReadonlyArray<readonly [string, string, string]> = [
-  ['Bhupinder', 'circle', '#1976D2'],
-  ['Payton', 'square', '#7B1FA2'],
-  ['Asher', 'triangle', '#F57C00'],
-  ['Zachary', 'star', '#FBC02D'],
-  ['Isabella', 'heart', '#E91E63'],
-  ['Odin', 'diamond', '#00ACC1'],
-  ['Paulina', 'hexagon', '#795548'],
-  ['Evelyn', 'pentagon', '#303F9F'],
-  ['Yoli', 'cross', '#AD1457'],
+  ['Alex', 'circle', '#1976D2'],
+  ['Bailey', 'square', '#7B1FA2'],
+  ['Casey', 'triangle', '#F57C00'],
+  ['Devon', 'star', '#FBC02D'],
+  ['Emery', 'heart', '#E91E63'],
+  ['Frankie', 'diamond', '#00ACC1'],
+  ['Harper', 'hexagon', '#795548'],
+  ['Jordan', 'pentagon', '#303F9F'],
+  ['Riley', 'cross', '#AD1457'],
 ];
 
 const { n } = db.prepare('SELECT COUNT(*) AS n FROM students').get() as { n: number };
