@@ -11,6 +11,7 @@ import {
   TREES,
   center,
   layoutTiles,
+  offsetRight,
   pointAlong,
   roomRect,
   routeAlongSidewalks,
@@ -111,14 +112,16 @@ export function CartoonMap({
     for (const g of ['A', 'B'] as Group[]) {
       const stops = campus.buildings.filter((b) => b.day === view && b.group === g).map((b) => layoutByKey.get(b.key)?.entrance).filter((p): p is Pt => !!p);
       if (!stops.length) continue;
-      let pts: Pt[] = [HOME.door];
+      let pts: Pt[] = [...HOME.path];
       let cur = HOME.door;
       for (const s of [...stops, HOME.door]) {
         const leg = routeAlongSidewalks(cur, s);
         pts = pts.concat(leg.slice(1));
         cur = s;
       }
-      out.push({ group: g, pts });
+      pts = pts.concat([...HOME.path].reverse().slice(1));
+      // Lanes: A hugs the centre, B walks the outer lane; out/back on opposite sides.
+      out.push({ group: g, pts: offsetRight(pts, g === 'A' ? 6 : 15) });
     }
     return out;
   }, [campus, view, layoutByKey]);
@@ -211,7 +214,7 @@ export function CartoonMap({
             </filter>
             <style>{`
               @keyframes rtc-walk { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
-              @keyframes rtc-dots { to { stroke-dashoffset: -32; } }
+              @keyframes rtc-dots { to { stroke-dashoffset: -28; } }
               .rtc-route { animation: rtc-dots 1.6s linear infinite; }
               .rtc-walker { animation: rtc-walk 0.7s ease-in-out infinite; }
               @media (prefers-reduced-motion: reduce) { .rtc-route, .rtc-walker { animation: none; } }
@@ -232,10 +235,10 @@ export function CartoonMap({
 
           {/* Sidewalks */}
           {SIDEWALKS.map((s, i) => (
-            <line key={`o${i}`} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#CDB98A" strokeWidth={30} strokeLinecap="round" />
+            <line key={`o${i}`} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#CDB98A" strokeWidth={46} strokeLinecap="round" />
           ))}
           {SIDEWALKS.map((s, i) => (
-            <line key={`i${i}`} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#EBDDB6" strokeWidth={22} strokeLinecap="round" />
+            <line key={`i${i}`} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#EBDDB6" strokeWidth={38} strokeLinecap="round" />
           ))}
 
           {/* Buildings */}
@@ -289,7 +292,7 @@ export function CartoonMap({
                           return (
                             <g key={ti}>
                               <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={6} fill={shade(l.color, -0.08)} />
-                              <TileText label={name} rect={r} fill={shade(l.color, -0.45)} weight={800} />
+                              {main && <TileText label={name} rect={r} fill={shade(l.color, -0.45)} weight={800} />}
                             </g>
                           );
                         }
@@ -350,6 +353,11 @@ export function CartoonMap({
             );
           })}
 
+          {/* Doorways */}
+          {LAYOUTS.map((l) => (
+            <circle key={`door-${l.key}`} cx={l.entrance.x} cy={l.entrance.y} r={7} fill="#B89A63" stroke="#EBDDB6" strokeWidth={2} pointerEvents="none" />
+          ))}
+
           {/* Trees */}
           {TREES.map((tr, i) => (
             <Tree key={i} x={tr.x} y={tr.y} r={tr.r ?? 22} />
@@ -358,11 +366,11 @@ export function CartoonMap({
           {/* Routes */}
           {routes.map((r) => {
             const d = r.pts.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
-            const walker = pointAlong(r.pts, r.group === 'A' ? 0.5 : 0.42);
+            const walker = pointAlong(r.pts, r.group === 'A' ? 0.3 : 0.25);
             return (
               <g key={r.group} pointerEvents="none">
-                <path d={d} fill="none" stroke="white" strokeWidth={14} strokeLinejoin="round" strokeLinecap="round" opacity={0.85} />
-                <path d={d} fill="none" stroke={GROUP_COLOR[r.group]} strokeWidth={9} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="1 16" className="rtc-route" />
+                <path d={d} fill="none" stroke="white" strokeWidth={11} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
+                <path d={d} fill="none" stroke={GROUP_COLOR[r.group]} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="1 13" className="rtc-route" />
                 <Walkers x={walker.x} y={walker.y} color={GROUP_COLOR[r.group]} label={r.group} />
               </g>
             );

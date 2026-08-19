@@ -30,6 +30,8 @@ export type BuildingLayout = {
   style?: 'gym' | 'cafeteria' | 'plain';
   /** Extra detached footprints drawn in the same colour (no tiles). */
   annex?: Array<{ rect: Rect; label?: string; rows?: Row[] }>;
+  /** Optional path drawn from the room out to the entrance (inside the building). */
+  doorPath?: Pt[];
   /** Draw as "location approximate". */
   approx?: boolean;
 };
@@ -49,7 +51,7 @@ export const BUILDINGS: BuildingLayout[] = [
       'corridor',
       [t('DA6'), t('DA4', 1.4), t('DA2', 1.6), t(null, 0.9)],
     ],
-    entrance: { x: 300, y: 985 },
+    entrance: { x: 500, y: 869 },
   },
   {
     key: 'c-annex',
@@ -60,7 +62,7 @@ export const BUILDINGS: BuildingLayout[] = [
       'corridor',
       [t('CA8'), t('CA6'), t('CA4'), t('CA2'), t('English Work Room', 0.9)],
     ],
-    entrance: { x: 330, y: 985 },
+    entrance: { x: 500, y: 1085 },
   },
   {
     key: 'd-hall',
@@ -71,7 +73,7 @@ export const BUILDINGS: BuildingLayout[] = [
       'corridor',
       [t('D37'), t('D35'), t('D33'), t('D31'), t('D29'), t('D27'), t('Math Work Room', 0.6)],
     ],
-    entrance: { x: 790, y: 985 },
+    entrance: { x: 500, y: 877 },
   },
   {
     key: 'c-hall',
@@ -89,7 +91,7 @@ export const BUILDINGS: BuildingLayout[] = [
       'corridor',
       [t('E55'), t('E53'), t('E51'), t('E49'), t('E47', 1.4)],
     ],
-    entrance: { x: 790, y: 752 },
+    entrance: { x: 500, y: 619 },
     annex: [
       {
         rect: R(356, 524, 74, 170),
@@ -126,30 +128,36 @@ export const BUILDINGS: BuildingLayout[] = [
   {
     key: 'a-loft',
     color: '#9AD0F5',
-    rect: R(640, 1200, 170, 76),
+    rect: R(320, 1190, 150, 70),
     rows: [[t('A Loft')]],
-    entrance: { x: 725, y: 1180 },
+    entrance: { x: 500, y: 1225 },
     approx: true,
   },
   {
     key: 'gym',
     color: '#FFD98E',
-    rect: R(410, 100, 226, 110),
+    rect: R(250, 160, 226, 120),
     rows: [[t('Gym', 2.2), t('PE Office', 0.8)]],
-    entrance: { x: 523, y: 316 },
+    entrance: { x: 363, y: 316 },
     style: 'gym',
     annex: [{ rect: R(706, 184, 78, 92), rows: [[t('J1')]] }],
   },
   {
     key: 'trailers',
     color: '#CDE9A8',
-    rect: R(136, 344, 580, 146),
+    rect: R(136, 344, 334, 146),
     rows: [
-      [t('T14'), t('T13'), t('T12'), t('T11'), t('T10'), t('T9 (SPED Offices)'), t('T8 (SPED Offices)')],
+      [t('T14'), t('T13'), t('T12'), t('T11')],
       'corridor',
-      [t('T7'), t('T6'), t('T5'), t('T4'), t('T3'), t('T2'), t('T1')],
+      [t('T7'), t('T6'), t('T5'), t('T4')],
     ],
-    entrance: { x: 426, y: 316 },
+    entrance: { x: 500, y: 417 },
+    annex: [
+      {
+        rect: R(530, 344, 250, 146),
+        rows: [[t('T10'), t('T9 (SPED Offices)'), t('T8 (SPED Offices)')], 'corridor', [t('T3'), t('T2'), t('T1')]],
+      },
+    ],
   },
   {
     key: 'ia-quad',
@@ -179,7 +187,7 @@ export const BUILDINGS: BuildingLayout[] = [
     color: '#B9E4D6',
     rect: R(1280, 136, 204, 174),
     rows: [[t('OH4'), t(null, 1.4), t('OH2 (Storage)')], 'corridor', [t(null, 2.4), t('OH3 (Office)')]],
-    entrance: { x: 1240, y: 240 },
+    entrance: { x: 1240, y: 223 },
     annex: [
       { rect: R(1280, 360, 74, 120), rows: [[t('Band Room')]] },
       { rect: R(1400, 400, 84, 90), rows: [[t('Choir Room')]] },
@@ -201,7 +209,14 @@ export const BUILDINGS: BuildingLayout[] = [
 ];
 
 /** Home classroom DA4 and where its door meets the sidewalk. */
-export const HOME = { building: 'd-annex', room: 'DA4', door: { x: 262, y: 985 } };
+export const HOME = {
+  building: 'd-annex',
+  room: 'DA4',
+  /** Sidewalk point where the D Annex hallway meets the path. */
+  door: { x: 500, y: 869 },
+  /** From inside DA4 out to the door (drawn as part of every route). */
+  path: [{ x: 262, y: 905 }, { x: 262, y: 869 }, { x: 500, y: 869 }] as Pt[],
+};
 
 /* ---------- Sidewalk network ---------- */
 
@@ -209,13 +224,11 @@ export type Segment = { a: Pt; b: Pt };
 
 export const SIDEWALKS: Segment[] = [
   // horizontal
-  { a: { x: 110, y: 316 }, b: { x: 1560, y: 316 } },
+  { a: { x: 136, y: 316 }, b: { x: 1560, y: 316 } },
   { a: { x: 500, y: 752 }, b: { x: 1560, y: 752 } },
-  { a: { x: 110, y: 985 }, b: { x: 1560, y: 985 } },
-  { a: { x: 110, y: 1180 }, b: { x: 1560, y: 1180 } },
+  { a: { x: 500, y: 985 }, b: { x: 1560, y: 985 } },
   // vertical
-  { a: { x: 110, y: 316 }, b: { x: 110, y: 1180 } },
-  { a: { x: 500, y: 500 }, b: { x: 500, y: 1180 } },
+  { a: { x: 500, y: 316 }, b: { x: 500, y: 1240 } },
   { a: { x: 1240, y: 60 }, b: { x: 1240, y: 985 } },
 ];
 
@@ -232,8 +245,10 @@ export const TREES: Array<Pt & { r?: number }> = [
   { x: 800, y: 60, r: 22 }, { x: 860, y: 40, r: 18 },
   { x: 1520, y: 80, r: 24 }, { x: 1530, y: 560, r: 22 }, { x: 1520, y: 1080, r: 26 },
   { x: 60, y: 200, r: 24 }, { x: 60, y: 900, r: 22 }, { x: 60, y: 1250, r: 20 },
-  { x: 900, y: 1240, r: 22 }, { x: 1300, y: 1240, r: 24 }, { x: 400, y: 1240, r: 20 },
-  { x: 1400, y: 40, r: 18 }, { x: 250, y: 60, r: 26 }, { x: 330, y: 250, r: 18 },
+  { x: 900, y: 1240, r: 22 }, { x: 1300, y: 1240, r: 24 }, { x: 600, y: 1240, r: 20 },
+  { x: 1400, y: 40, r: 18 }, { x: 250, y: 60, r: 26 }, { x: 560, y: 70, r: 20 },
+  { x: 90, y: 600, r: 22 }, { x: 90, y: 1060, r: 20 }, 
+  { x: 700, y: 1220, r: 24 }, { x: 1120, y: 1220, r: 20 }, 
 ];
 
 export const FOUNTAIN: Pt = { x: 1155, y: 760 };
@@ -405,4 +420,44 @@ export function pointAlong(pts: Pt[], f: number): Pt {
     target -= seg;
   }
   return pts[pts.length - 1];
+}
+
+/**
+ * Offset a polyline to the right of its direction of travel by `d`.
+ * Out-and-back legs therefore land on opposite sides of the sidewalk, and
+ * two groups sharing a sidewalk get parallel lanes instead of overlapping.
+ */
+export function offsetRight(pts: Pt[], d: number): Pt[] {
+  const p = pts.filter((q, i) => i === 0 || Math.hypot(q.x - pts[i - 1].x, q.y - pts[i - 1].y) > 0.01);
+  if (p.length < 2) return p;
+  const segs = [] as Array<{ a: Pt; b: Pt; n: Pt }>;
+  for (let i = 1; i < p.length; i++) {
+    const dx = p[i].x - p[i - 1].x, dy = p[i].y - p[i - 1].y;
+    const len = Math.hypot(dx, dy);
+    const n = { x: -dy / len, y: dx / len }; // right-hand normal (screen coords)
+    segs.push({ a: { x: p[i - 1].x + n.x * d, y: p[i - 1].y + n.y * d }, b: { x: p[i].x + n.x * d, y: p[i].y + n.y * d }, n });
+  }
+  const out: Pt[] = [segs[0].a];
+  for (let i = 1; i < segs.length; i++) {
+    const s1 = segs[i - 1], s2 = segs[i];
+    const dot = s1.n.x * s2.n.x + s1.n.y * s2.n.y;
+    if (dot < -0.99) {
+      // U-turn: cap around the turnaround point
+      out.push(s1.b, s2.a);
+    } else if (dot > 0.99) {
+      out.push(s2.a);
+    } else {
+      // intersect the two offset lines
+      const x1 = s1.a.x, y1 = s1.a.y, x2 = s1.b.x, y2 = s1.b.y;
+      const x3 = s2.a.x, y3 = s2.a.y, x4 = s2.b.x, y4 = s2.b.y;
+      const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (Math.abs(den) < 1e-6) out.push(s2.a);
+      else {
+        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+        out.push({ x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) });
+      }
+    }
+  }
+  out.push(segs[segs.length - 1].b);
+  return out;
 }
