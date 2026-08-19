@@ -1,6 +1,6 @@
 /**
  * Campus layout for North High School, Bakersfield — traced from an aerial
- * photo of the school (web/public/campus-aerial.jpg, 2000 × 1510).
+ * photo of the school (2000 × 1510 pixel space; the photo itself isn't shown).
  *
  * Every building outline below was traced off the photo, so shapes sit where
  * they really are and look the way they really look (B Hall tilts, the
@@ -14,8 +14,6 @@
 
 export const MAP_W = 2000;
 export const MAP_H = 1510;
-export const AERIAL_SRC = '/campus-aerial.jpg';
-export const AERIAL_CREDIT = 'Aerial imagery © Esri, Maxar, Earthstar Geographics';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Pt = { x: number; y: number };
@@ -27,13 +25,23 @@ export type Tile = { room: string | null; w?: number };
 export type Row = Tile[] | 'corridor';
 
 /** A rectangle of room tiles, optionally rotated about its centre (degrees, clockwise). */
-export type Frame = { rect: Rect; rows: Row[]; angle?: number };
+export type Frame = {
+  rect: Rect;
+  rows: Row[];
+  angle?: number;
+  /** Detached parts can have their own way in (defaults to the building's). */
+  entrance?: Pt;
+  door?: Pt;
+  walkway?: 'top' | 'bottom' | 'left' | 'right';
+};
 
 export type BuildingLayout = {
   key: string;
   color: string;
   /** Traced footprint (world coords). */
   outline: Pt[];
+  /** Further detached footprints of the same building. */
+  extraOutlines?: Pt[][];
   /** Room frames — the main one first; extra detached parts after. */
   frames: Frame[];
   /** Where the sidewalk meets the building — snapped onto the nearest walkway. */
@@ -76,28 +84,18 @@ export const BUILDINGS: BuildingLayout[] = [
     nameplate: 'top',
   },
   {
-    key: 'ia-quad',
-    color: '#F9C6D8',
-    // An L of shops around a work yard, plus the long east shop building.
-    outline: [
-      P(1353, 349), P(1425, 349), P(1425, 330), P(1594, 330), P(1594, 392), P(1600, 392),
-      P(1600, 392), P(1669, 392), P(1669, 560), P(1600, 560), P(1600, 442), P(1487, 442),
-      P(1487, 517), P(1353, 517),
-    ],
+    key: 'cafeteria',
+    color: '#FFB98A',
+    // The cafeteria: the big building with the slanted south face.
+    outline: [P(1325, 600), P(1525, 600), P(1525, 608), P(1655, 608), P(1655, 742), P(1545, 752), P(1330, 688)],
     frames: [
-      {
-        rect: R(1356, 336, 310, 220),
-        rows: [
-          [t('IA1'), t('IA7'), t('IA6')],
-          [t('IA2'), t(null), t('IA5')],
-          [t(null), t('IA3'), t('IA4 (ROC)')],
-        ],
-      },
+      { rect: R(1360, 604, 270, 96), rows: [[t('Migrant / Y2L Office', 0.8), t('Cafeteria', 1.6), t('Speech-Language Pathology', 0.8)]] },
     ],
-    entrance: P(1300, 440),
-    door: P(1353, 440),
+    entrance: P(1315, 655),
+    door: P(1327, 655),
     walkway: 'left',
-    nameplate: 'top',
+    nameplate: 'bottom',
+    nameAt: P(1470, 705),
   },
   {
     key: 'oneill',
@@ -106,31 +104,40 @@ export const BUILDINGS: BuildingLayout[] = [
     frames: [
       { rect: R(1681, 549, 211, 92), rows: [[t('OH4'), t('OH2 (Storage)')], 'corridor', [t('OH3 (Office)'), t('Band Room'), t('Choir Room')]] },
     ],
-    entrance: P(1650, 620),
-    door: P(1677, 596),
+    entrance: P(1660, 585),
+    door: P(1677, 594),
     nameplate: 'top',
   },
   {
-    key: 'cafeteria',
-    color: '#FFB98A',
-    // Big multipurpose building with the slanted south face.
-    outline: [P(1358, 596), P(1531, 596), P(1531, 630), P(1585, 636), P(1622, 679), P(1622, 743), P(1354, 675)],
-    frames: [
-      { rect: R(1362, 600, 220, 118), rows: [[t('Migrant / Y2L Office')], [t('Cafeteria')], [t('Speech-Language Pathology')]] },
+    key: 'ia-quad',
+    color: '#F9C6D8',
+    // Industrial arts: shops around the work yard — west wing (IA1/IA2), the small
+    // block north of the yard (IA7), the south block (IA3), and the tilted east wing (IA6/IA5/IA4).
+    outline: [P(1347, 352), P(1425, 352), P(1425, 490), P(1562, 490), P(1538, 545), P(1347, 545)],
+    extraOutlines: [
+      [P(1490, 360), P(1554, 360), P(1554, 414), P(1490, 414)],
+      [P(1601, 400), P(1665, 400), P(1584, 580), P(1520, 580)],
     ],
-    entrance: P(1342, 556),
-    door: P(1358, 620),
+    frames: [
+      { rect: R(1350, 356, 72, 132), rows: [[t('IA1')], [t('IA2')]] },
+      { rect: R(1493, 363, 58, 48), rows: [[t('IA7')]], entrance: P(1522, 340), walkway: 'top' },
+      { rect: R(1428, 493, 110, 49), rows: [[t('IA3')]], entrance: P(1483, 585), walkway: 'bottom' },
+      { rect: R(1560, 392, 64, 196), angle: 24, rows: [[t('IA6')], [t('IA5')], [t('IA4 (ROC)')]], entrance: P(1525, 585), walkway: 'left' },
+    ],
+    entrance: P(1335, 440),
+    door: P(1347, 440),
     walkway: 'left',
     nameplate: 'top',
+    nameAt: P(1470, 330),
   },
   {
     key: 'trailers',
     color: '#CDE9A8',
-    // Portables: seven modules in the long row (two rooms each), three in the short row.
-    outline: [P(615, 768), P(827, 768), P(827, 824), P(615, 824)],
+    // Two rows of portables; the walkway between them is the "hallway".
+    outline: [P(612, 708), P(812, 708), P(812, 840), P(612, 840)],
     frames: [
       {
-        rect: R(615, 768, 212, 56),
+        rect: R(612, 708, 200, 132),
         rows: [
           [t('T14'), t('T13'), t('T12'), t('T11'), t('T10'), t('T9 (SPED Offices)'), t('T8 (SPED Offices)')],
           'corridor',
@@ -139,9 +146,9 @@ export const BUILDINGS: BuildingLayout[] = [
       },
     ],
     entrance: P(830, 753),
-    door: P(832, 796),
+    door: P(812, 773),
     nameplate: 'top',
-    nameAt: P(721, 748),
+    nameAt: P(712, 692),
   },
 
   /* ---------- the classroom wings ---------- */
@@ -306,23 +313,47 @@ export const HOME = { building: 'd-annex', room: 'DA4' };
 /* ---------- sidewalks, traced from the real walkways ---------- */
 
 export const SIDEWALKS: Segment[] = [
-  { a: P(850, 372), b: P(1300, 372) },     // north walk, south of the gym
-  { a: P(1300, 372), b: P(1300, 551) },    // down the west side of IA Quad
-  { a: P(852, 372), b: P(852, 753) },      // between the courts and the small gym
-  { a: P(615, 753), b: P(1213, 753) },     // trailers → north of E Hall
+  // --- north: gym & the campus road ---
+  { a: P(850, 372), b: P(1240, 372) },     // walk south of the gym
+  { a: P(1210, 140), b: P(1210, 372) },    // east side of the gym, up to the north lot
+  { a: P(883, 185), b: P(800, 300) },      // from the gym's front door toward the track
+  { a: P(800, 300), b: P(770, 372) },
+  { a: P(770, 372), b: P(850, 372) },
+  { a: P(1240, 372), b: P(1300, 340) },    // bends up onto the campus road
+  { a: P(1300, 340), b: P(1690, 305) },    // the road north of the shops
+  { a: P(1690, 305), b: P(1690, 540) },    // the road down the east side
+  { a: P(1690, 540), b: P(1660, 585) },    // to O'Neill's door
+  { a: P(1300, 340), b: P(1335, 372) },    // drive down the west face of the shops
+  { a: P(1335, 372), b: P(1335, 585) },
+  { a: P(1100, 395), b: P(1100, 540) },    // between the small gym and the block east of it
+  // --- west: courts, trailers, fields ---
+  { a: P(852, 372), b: P(852, 880) },      // between the courts and the small gym, down past the trailers
+  { a: P(600, 490), b: P(852, 490) },      // north of the courts
+  { a: P(95, 466), b: P(852, 466) },       // south of the track
+  { a: P(60, 100), b: P(60, 1140) },       // sidewalk along McCray St
+  { a: P(60, 466), b: P(95, 466) },
+  { a: P(610, 753), b: P(610, 1130) },     // along the fields' east fence
+  { a: P(610, 753), b: P(1213, 753) },     // between the trailer rows, then north of E Hall
   { a: P(935, 753), b: P(935, 1130) },     // west of the wings (main N–S)
-  { a: P(1102, 540), b: P(1342, 556) },    // plaza: small gym → cafeteria
-  { a: P(1245, 540), b: P(1245, 760) },    // plaza N–S
+  // --- the plaza ---
+  { a: P(997, 673), b: P(1130, 607) },     // along the small gym's south side
+  { a: P(1102, 540), b: P(1335, 556) },    // plaza: small gym → shops
+  { a: P(1245, 540), b: P(1245, 790) },    // plaza N–S
+  { a: P(1245, 585), b: P(1660, 585) },    // south of the shops, east to O'Neill
+  { a: P(1315, 585), b: P(1315, 690) },    // west face of the cafeteria
   { a: P(1094, 652), b: P(1245, 738) },    // diagonal from the small gym to the plaza
-  { a: P(1213, 753), b: P(1245, 760) },    // plaza connector
-  { a: P(1245, 760), b: P(1622, 760) },    // south of the cafeteria
+  { a: P(1213, 753), b: P(1245, 790) },    // plaza connector
+  // --- the quad ---
   { a: P(1213, 753), b: P(1213, 1130) },   // east of the wings, along the quad
-  { a: P(1213, 790), b: P(1400, 790) },    // north edge of the quad
-  { a: P(1400, 790), b: P(1525, 990) },    // diagonal across the quad
-  { a: P(1213, 990), b: P(1525, 990) },    // quad side of Admin / the loft
-  { a: P(1525, 990), b: P(1600, 760) },    // along the west face of B Hall
-  { a: P(1622, 760), b: P(1650, 620) },    // up to O'Neill Hall
-  { a: P(935, 1130), b: P(1620, 1130) },   // south walk, above the parking
+  { a: P(1213, 790), b: P(1622, 790) },    // north edge of the quad, south of the cafeteria
+  { a: P(1385, 790), b: P(1520, 985) },    // diagonal across the quad
+  { a: P(1213, 990), b: P(1560, 990) },    // quad side of Admin / the loft
+  { a: P(1520, 985), b: P(1605, 815) },    // along the west face of B Hall
+  { a: P(1605, 815), b: P(1622, 790) },
+  { a: P(1622, 790), b: P(1650, 640) },    // up past the amphitheatre
+  { a: P(1650, 640), b: P(1660, 585) },
+  // --- south ---
+  { a: P(610, 1130), b: P(1620, 1130) },   // walk above Galaxy Ave
 ];
 
 /* ---------- other traced shapes, for orientation only ---------- */
@@ -337,9 +368,9 @@ export const EXTRAS: Extra[] = [
   },
   { kind: 'building', outline: [P(1110, 428), P(1198, 428), P(1198, 452), P(1270, 452), P(1270, 540), P(1110, 540)] },
   { kind: 'building', outline: [P(1262, 606), P(1304, 606), P(1304, 640), P(1262, 640)] },
-  { kind: 'building', outline: [P(615, 705), P(701, 705), P(701, 750), P(615, 750)] },
-  { kind: 'building', outline: [P(755, 500), P(825, 500), P(825, 528), P(755, 528)] },
-  { kind: 'court', label: 'Basketball Courts', outline: rectPoly(R(615, 500, 235, 200)) },
+  { kind: 'building', outline: [P(760, 476), P(812, 476), P(812, 512), P(760, 512)] },
+  { kind: 'court', label: 'Basketball Courts', outline: rectPoly(R(620, 530, 192, 172)) },
+  { kind: 'building', outline: rectPoly(R(700, 852, 58, 48)) },
   {
     kind: 'seating',
     label: 'Amphitheatre',
@@ -357,8 +388,97 @@ export const LANDMARKS: Landmark[] = [
   { at: P(1420, 870), label: 'Quad' },
   { at: P(1390, 1300), label: 'Parking' },
   { at: P(1810, 1140), label: 'Practice Field' },
-  { at: P(1545, 440), label: 'IA Yard' },
 ];
+
+/* ---------- the ground, drawn: roads, fields, lots, plazas, trees ---------- */
+
+export type Shape =
+  | { kind: 'rect'; rect: Rect; fill: string; rx?: number; opacity?: number; stroke?: string }
+  | { kind: 'poly'; pts: Pt[]; fill: string; opacity?: number; stroke?: string }
+  | { kind: 'ellipse'; c: Pt; rx: number; ry: number; fill: string; opacity?: number }
+  | { kind: 'sector'; c: Pt; r: number; from: number; to: number; fill: string; opacity?: number }
+  | { kind: 'line'; a: Pt; b: Pt; stroke: string; width: number; opacity?: number };
+
+const ROAD = '#9AA3A8';
+const DIRT = '#D9C39A';
+const PAVE = '#E9E2CF';
+const LOT = '#B7BDBF';
+const SOLAR = '#3F4C5A';
+const FIELD = '#7CC061';
+
+export const GROUND: Shape[] = [
+  // dead grass / dirt around the ball fields
+  { kind: 'poly', pts: [P(95, 470), P(612, 470), P(612, 1100), P(95, 1100)], fill: DIRT, opacity: 0.55 },
+  // roads around the block
+  { kind: 'rect', rect: R(0, 30, 2000, 42), fill: ROAD },
+  { kind: 'rect', rect: R(8, 0, 38, 1510), fill: ROAD },
+  { kind: 'rect', rect: R(1930, 0, 42, 1510), fill: ROAD },
+  { kind: 'rect', rect: R(0, 1150, 2000, 28), fill: ROAD },
+  { kind: 'line', a: P(1300, 335), b: P(1690, 300), stroke: ROAD, width: 24 },
+  { kind: 'line', a: P(1690, 300), b: P(1690, 560), stroke: ROAD, width: 24 },
+  { kind: 'line', a: P(1690, 320), b: P(1930, 320), stroke: ROAD, width: 22 },
+  { kind: 'line', a: P(1665, 830), b: P(1740, 950), stroke: ROAD, width: 22 },
+  { kind: 'line', a: P(1222, 1150), b: P(1222, 1100), stroke: ROAD, width: 22 },
+  // paved plazas
+  { kind: 'rect', rect: R(760, 335, 540, 62), fill: PAVE, rx: 10 },
+  { kind: 'rect', rect: R(1094, 532, 250, 230), fill: PAVE, rx: 8 },
+  { kind: 'poly', pts: [P(1096, 556), P(1238, 556), P(1238, 640), P(1096, 640)], fill: FIELD },
+  { kind: 'poly', pts: [P(1096, 662), P(1238, 662), P(1238, 748), P(1096, 748)], fill: FIELD },
+  { kind: 'rect', rect: R(1225, 1042, 400, 90), fill: PAVE, rx: 8 },
+  { kind: 'rect', rect: R(600, 478, 250, 50), fill: PAVE },
+  { kind: 'rect', rect: R(830, 380, 270, 155), fill: PAVE, rx: 8 }, // plaza between the gyms
+  { kind: 'rect', rect: R(1425, 350, 140, 140), fill: '#8E9599' },  // the IA work yard (asphalt)
+  { kind: 'rect', rect: R(1255, 400, 92, 100), fill: '#8E9599' },   // drive west of the cafeteria
+  { kind: 'rect', rect: R(1290, 500, 57, 80), fill: PAVE },         // walk down to the plaza
+  { kind: 'rect', rect: R(1347, 545, 313, 62), fill: PAVE, rx: 6 }, // plaza south of the cafeteria
+  { kind: 'rect', rect: R(1305, 595, 22, 100), fill: PAVE },        // west face of the shop building
+  { kind: 'poly', pts: [P(1622, 610), P(1740, 610), P(1740, 830), P(1600, 830)], fill: PAVE }, // around the amphitheatre
+  // football field & track
+  { kind: 'ellipse', c: P(437, 290), rx: 342, ry: 120, fill: '#C97B54' },
+  { kind: 'ellipse', c: P(437, 290), rx: 300, ry: 84, fill: FIELD },
+  { kind: 'rect', rect: R(200, 214, 430, 146), fill: '#71B85A' },
+  { kind: 'rect', rect: R(200, 214, 40, 146), fill: '#B23A3A', opacity: 0.85 },
+  { kind: 'rect', rect: R(590, 214, 40, 146), fill: '#B23A3A', opacity: 0.85 },
+  ...Array.from({ length: 9 }, (_, i) => ({ kind: 'line' as const, a: P(240 + (i + 1) * 35, 216), b: P(240 + (i + 1) * 35, 358), stroke: '#FFFFFF', width: 2, opacity: 0.8 })),
+  { kind: 'rect', rect: R(280, 105, 280, 48), fill: LOT, rx: 4 },
+  { kind: 'rect', rect: R(280, 418, 280, 50), fill: LOT, rx: 4 },
+  // baseball
+  { kind: 'sector', c: P(605, 655), r: 405, from: 88, to: 200, fill: DIRT },
+  { kind: 'sector', c: P(605, 655), r: 320, from: 88, to: 200, fill: FIELD, opacity: 0.5 },
+  { kind: 'sector', c: P(605, 655), r: 135, from: 88, to: 200, fill: '#D6A16B' },
+  { kind: 'ellipse', c: P(525, 612), rx: 26, ry: 26, fill: FIELD },
+  // softball × 2 (campus) + park diamond south of Galaxy Ave
+  { kind: 'sector', c: P(120, 1070), r: 215, from: 272, to: 360, fill: DIRT },
+  { kind: 'sector', c: P(120, 1070), r: 95, from: 272, to: 360, fill: '#D6A16B' },
+  { kind: 'sector', c: P(615, 1085), r: 205, from: 272, to: 360, fill: DIRT },
+  { kind: 'sector', c: P(615, 1085), r: 90, from: 272, to: 360, fill: '#D6A16B' },
+  { kind: 'sector', c: P(890, 1405), r: 180, from: 200, to: 340, fill: DIRT, opacity: 0.8 },
+  { kind: 'rect', rect: R(830, 1300, 130, 100), fill: LOT, rx: 10 },
+  // tennis
+  { kind: 'rect', rect: R(1700, 105, 219, 212), fill: '#D9534F', rx: 8 },
+  ...[0, 1, 2].flatMap((cx) => [0, 1].map((cy) => ({ kind: 'rect' as const, rect: R(1712 + cx * 70, 115 + cy * 102, 60, 92), fill: '#5C8FB5', rx: 3, stroke: '#FFFFFF' }))),
+  // solar carports & lots
+  { kind: 'rect', rect: R(1700, 325, 160, 170), fill: LOT, rx: 6 },
+  { kind: 'rect', rect: R(1706, 332, 144, 48), fill: SOLAR, rx: 3 },
+  { kind: 'rect', rect: R(1706, 396, 144, 48), fill: SOLAR, rx: 3 },
+  { kind: 'rect', rect: R(1706, 458, 144, 30), fill: SOLAR, rx: 3 },
+  { kind: 'rect', rect: R(1215, 1180, 355, 265), fill: LOT, rx: 10 },
+  ...[0, 1, 2, 3, 4].map((i) => ({ kind: 'rect' as const, rect: R(1232 + i * 66, 1196, 44, 234), fill: SOLAR, rx: 3 })),
+  { kind: 'rect', rect: R(1170, 80, 190, 50), fill: LOT, rx: 6 },
+  // practice field
+  { kind: 'rect', rect: R(1640, 950, 270, 380), fill: FIELD, rx: 60, stroke: '#FFFFFF' },
+];
+
+export type Tree = Pt & { r?: number };
+export const TREES: Tree[] = [
+  P(1030, 716), P(1075, 728), P(1122, 720), P(1170, 734),
+  P(1300, 656), P(1340, 700), P(1250, 830), P(1300, 872), P(1330, 932), P(1450, 880), P(1520, 940), P(1470, 830),
+  P(1720, 600), P(1760, 612), P(1650, 1092), P(1600, 1102), P(1580, 604),
+  P(760, 240), P(800, 302), P(850, 250), P(1230, 270), P(1290, 250),
+  P(1900, 750), P(1900, 900), P(60, 600), P(70, 1000), P(60, 1300),
+  P(400, 1222), P(600, 1232), P(1000, 1232), P(1100, 1252), P(1400, 1480), P(1800, 1400),
+  P(890, 700), P(1160, 560), P(1160, 700), P(1590, 1010),
+].map((p, i) => ({ ...p, r: 14 + ((i * 7) % 9) }));
 
 /* ---------- Geometry helpers ---------- */
 

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, bLabel, rLabel, type Campus, type Day, type Group, type Signup } from '../lib/api';
 import {
-  AERIAL_CREDIT,
-  AERIAL_SRC,
   BUILDINGS as LAYOUTS,
   EXTRAS,
+  GROUND,
   HOME,
   LANDMARKS,
   MAP_H,
   MAP_W,
   SIDEWALKS,
+  TREES,
   bounds,
   center,
   cumulative,
@@ -118,8 +118,10 @@ export function CartoonMap({
     const homeRoom = home ? findRoom(home, HOME.room) : null;
     if (!home || !homeRoom) return null;
 
+    const entOf = (l: BuildingLayout, f: Frame, main: boolean) => (main ? l.entrance : f.entrance ?? l.entrance);
+    const doorOf = (l: BuildingLayout, f: Frame, main: boolean) => (main ? l.door : f.door);
     const spineFor = (l: BuildingLayout, f: Frame, main: boolean): Segment => {
-      const local = frameSpine(f, toLocal(l.entrance, f), l.walkway, main ? l.spine : undefined);
+      const local = frameSpine(f, toLocal(entOf(l, f, main), f), f.walkway ?? l.walkway, main ? l.spine : undefined);
       return { a: toWorld(local.a, f), b: toWorld(local.b, f) };
     };
 
@@ -159,19 +161,21 @@ export function CartoonMap({
         if (!here.length) return;
         touched = true;
 
+        const ent = entOf(l, frame, fi === 0);
+        const dr = doorOf(l, frame, fi === 0);
         if (inside?.key !== id) {
           stepOutside();
-          pts.push(...routeAlongSidewalks(cur, l.entrance).slice(1));
-          cur = l.entrance;
+          pts.push(...routeAlongSidewalks(cur, ent).slice(1));
+          cur = ent;
           const spine = spineFor(l, frame, fi === 0);
-          if (fi === 0 && l.door) { pts.push(l.door); cur = l.door; }
+          if (dr) { pts.push(dr); cur = dr; }
           const entry = nearerEnd(spine, cur);
           pts.push(entry);
           cur = entry;
-          inside = { key: id, spine, entrance: l.entrance, door: fi === 0 ? l.door : undefined };
+          inside = { key: id, spine, entrance: ent, door: dr };
         }
 
-        const localSpine = frameSpine(frame, toLocal(l.entrance, frame), l.walkway, fi === 0 ? l.spine : undefined);
+        const localSpine = frameSpine(frame, toLocal(ent, frame), frame.walkway ?? l.walkway, fi === 0 ? l.spine : undefined);
         const remaining = here.map((s) => {
           const d = roomDoorLocal(tiles.find((t) => t.room === s.room)!.rect, localSpine);
           return { s, door: toWorld(d.door, frame), hall: toWorld(d.hall, frame) };
@@ -368,9 +372,29 @@ export function CartoonMap({
           onMouseUp={() => { setTimeout(() => { drag.current = null; }, 0); }}
           onMouseLeave={() => { drag.current = null; }}
         >
-          {/* The real campus */}
-          <image href={AERIAL_SRC} x={0} y={0} width={MAP_W} height={MAP_H} preserveAspectRatio="none" />
-          <rect x={0} y={0} width={MAP_W} height={MAP_H} fill="#F4F6EE" opacity={view === 'week' ? 0.22 : 0.36} />
+          <defs>
+            <pattern id="grass" width="46" height="46" patternUnits="userSpaceOnUse">
+              <rect width="46" height="46" fill="#A2D284" />
+              <circle cx="10" cy="12" r="3" fill="#ACD98F" />
+              <circle cx="32" cy="30" r="4" fill="#97C97A" />
+              <circle cx="24" cy="6" r="2" fill="#ACD98F" />
+            </pattern>
+          </defs>
+
+          {/* The ground, drawn to match what's really there */}
+          <rect x={0} y={0} width={MAP_W} height={MAP_H} fill="url(#grass)" />
+          {GROUND.map((g, i) => {
+            if (g.kind === 'rect') return <rect key={i} x={g.rect.x} y={g.rect.y} width={g.rect.w} height={g.rect.h} rx={g.rx ?? 0} fill={g.fill} opacity={g.opacity ?? 1} stroke={g.stroke} strokeWidth={g.stroke ? 2 : 0} />;
+            if (g.kind === 'poly') return <polygon key={i} points={poly(g.pts)} fill={g.fill} opacity={g.opacity ?? 1} stroke={g.stroke} strokeWidth={g.stroke ? 2 : 0} />;
+            if (g.kind === 'ellipse') return <ellipse key={i} cx={g.c.x} cy={g.c.y} rx={g.rx} ry={g.ry} fill={g.fill} opacity={g.opacity ?? 1} />;
+            if (g.kind === 'line') return <line key={i} x1={g.a.x} y1={g.a.y} x2={g.b.x} y2={g.b.y} stroke={g.stroke} strokeWidth={g.width} strokeLinecap="round" opacity={g.opacity ?? 1} />;
+            // sector: a pie slice from angle `from` to `to` (degrees, clockwise from +x)
+            const a0 = (g.from * Math.PI) / 180, a1 = (g.to * Math.PI) / 180;
+            const p0 = { x: g.c.x + g.r * Math.cos(a0), y: g.c.y + g.r * Math.sin(a0) };
+            const p1 = { x: g.c.x + g.r * Math.cos(a1), y: g.c.y + g.r * Math.sin(a1) };
+            const large = Math.abs(g.to - g.from) > 180 ? 1 : 0;
+            return <path key={i} d={`M${g.c.x},${g.c.y} L${p0.x},${p0.y} A${g.r},${g.r} 0 ${large} 1 ${p1.x},${p1.y} Z`} fill={g.fill} opacity={g.opacity ?? 1} />;
+          })}
 
           {/* Sidewalks, traced */}
           {SIDEWALKS.map((s, i) => (
@@ -405,6 +429,15 @@ export function CartoonMap({
             );
           })}
 
+          {/* Trees */}
+          {TREES.map((tr, i) => (
+            <g key={`t${i}`} pointerEvents="none">
+              <ellipse cx={tr.x + 3} cy={tr.y + (tr.r ?? 16) * 0.8} rx={(tr.r ?? 16) * 0.8} ry={(tr.r ?? 16) * 0.3} fill="#2f5a1f" opacity={0.18} />
+              <circle cx={tr.x} cy={tr.y} r={tr.r ?? 16} fill="#4E9A3E" />
+              <circle cx={tr.x - (tr.r ?? 16) * 0.3} cy={tr.y - (tr.r ?? 16) * 0.3} r={(tr.r ?? 16) * 0.5} fill="#63B24E" />
+            </g>
+          ))}
+
           {/* Places the students know */}
           {LANDMARKS.map((lm, i) => {
             const fs = 20 * tscale;
@@ -436,14 +469,18 @@ export function CartoonMap({
             const lit = isLit(l.key);
             const name = bLabel(campus, l.key);
             const gcolor = info ? GROUP_COLOR[info.group] : '#1A2733';
-            const bb = bounds(l.outline);
+            const bb = bounds([...l.outline, ...(l.extraOutlines ?? []).flat()]);
             return (
               <g key={l.key} style={{ cursor: 'pointer' }}
                 onClick={() => { if (drag.current?.moved) return; onSelect(selected === l.key ? null : l.key); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setRename({ key: `b:${l.key}`, title: 'Rename building', base: info?.name ?? l.key, current: name, at: { x: bb.x + bb.w / 2, y: bb.y } }); }}>
-                {/* footprint */}
-                <polygon points={poly(l.outline.map((p) => ({ x: p.x + (l.upstairs ? 6 : 4), y: p.y + (l.upstairs ? 10 : 6) })))} fill="#000" opacity={l.upstairs ? 0.2 : 0.14} />
-                <polygon points={poly(l.outline)} fill={lit ? l.color : QUIET_FILL} stroke={lit ? gcolor : shade(QUIET_FILL, -0.15)} strokeWidth={lit ? 5 : 2} strokeLinejoin="round" />
+                {/* footprint(s) */}
+                {[l.outline, ...(l.extraOutlines ?? [])].map((o, oi) => (
+                  <g key={oi}>
+                    <polygon points={poly(o.map((p) => ({ x: p.x + (l.upstairs ? 6 : 4), y: p.y + (l.upstairs ? 10 : 6) })))} fill="#000" opacity={l.upstairs ? 0.2 : 0.14} />
+                    <polygon points={poly(o)} fill={lit ? l.color : QUIET_FILL} stroke={lit ? gcolor : shade(QUIET_FILL, -0.15)} strokeWidth={lit ? 5 : 2} strokeLinejoin="round" />
+                  </g>
+                ))}
 
                 {/* room frames (only when the building is in play) */}
                 {lit && l.frames.map((f, fi) => {
@@ -534,6 +571,11 @@ export function CartoonMap({
             </g>
           )}
 
+          {/* Debug: ?aerial overlays the photo to check alignment */}
+          {new URLSearchParams(window.location.search).has('aerial') && (
+            <image href="/campus-aerial-debug.png" x={0} y={0} width={MAP_W} height={MAP_H} preserveAspectRatio="none" opacity={0.55} pointerEvents="none" />
+          )}
+
           {/* Walker */}
           {walker && (
             <g pointerEvents="none" transform={`translate(${walker.x} ${walker.y}) scale(${k})`}>
@@ -603,7 +645,6 @@ export function CartoonMap({
 
       <p className="text-sm text-rtc-gray font-bold">
         Scroll to zoom, drag to pan. Double-click any building or room to rename it.
-        <span className="font-normal opacity-70"> · {AERIAL_CREDIT}</span>
       </p>
     </div>
   );

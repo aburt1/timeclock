@@ -53,13 +53,14 @@ audit trails, this is the wrong tool on purpose.
   Reports tab (hours by student, hours by day, date-range presets), roster
   management, and a **Pickup Routes** tab — both a teacher dashboard and a
   teaching aid for the classroom board:
-  - A campus map **traced from an aerial photo of the school**: every
-    building's real outline (the tilted B Hall, the cafeteria's cut corner,
-    Admin's rotunda, the barrel-roofed small gym), the real diagonal
-    walkways, and the room-map schematic fitted inside each building so rooms
-    are still easy to find. Scroll to zoom, drag to pan. (Imagery © Esri,
-    Maxar, Earthstar Geographics — one static image shipped with the app; no
-    live tiles, no API keys.)
+  - A fully drawn campus map **traced from an aerial photo of the school** —
+    every building's real outline (the tilted B Hall, the cafeteria's cut
+    corner, Admin's rotunda, the IA shops around their yard, the barrel-roofed
+    small gym), the real walkways, and the fields, courts, lots and roads —
+    with the room-map schematic fitted inside each building so rooms are
+    still easy to find. No photo is shipped; it's all vector. Scroll to zoom,
+    drag to pan. (During development, `/admin?aerial` overlays the reference
+    photo to check alignment.)
   - Pick a day and a group, and the map draws that walk **door to door** —
     out of DA4, along the sidewalks, down each hallway, and into every
     classroom with a bin, with the stops numbered in walking order.
