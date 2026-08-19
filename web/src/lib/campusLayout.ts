@@ -111,18 +111,18 @@ export const BUILDINGS: BuildingLayout[] = [
   {
     key: 'ia-quad',
     color: '#F9C6D8',
-    // Industrial arts: shops around the work yard — west wing (IA1/IA2), the small
-    // block north of the yard (IA7), the south block (IA3), and the tilted east wing (IA6/IA5/IA4).
-    outline: [P(1347, 352), P(1425, 352), P(1425, 490), P(1562, 490), P(1538, 545), P(1347, 545)],
+    // Industrial arts, as Andrew outlined it: an L (west wing IA1/IA2 + south block IA3)
+    // around the work yard, IA7 on its own north of the yard, and a straight east wing (IA6/IA5/IA4).
+    outline: [P(1347, 352), P(1425, 352), P(1425, 490), P(1565, 490), P(1565, 548), P(1347, 548)],
     extraOutlines: [
-      [P(1490, 360), P(1554, 360), P(1554, 414), P(1490, 414)],
-      [P(1601, 400), P(1665, 400), P(1584, 580), P(1520, 580)],
+      [P(1484, 358), P(1556, 358), P(1556, 430), P(1484, 430)],
+      [P(1600, 392), P(1669, 392), P(1669, 560), P(1600, 560)],
     ],
     frames: [
       { rect: R(1350, 356, 72, 132), rows: [[t('IA1')], [t('IA2')]] },
-      { rect: R(1493, 363, 58, 48), rows: [[t('IA7')]], entrance: P(1522, 340), walkway: 'top' },
-      { rect: R(1428, 493, 110, 49), rows: [[t('IA3')]], entrance: P(1483, 585), walkway: 'bottom' },
-      { rect: R(1560, 392, 64, 196), angle: 24, rows: [[t('IA6')], [t('IA5')], [t('IA4 (ROC)')]], entrance: P(1525, 585), walkway: 'left' },
+      { rect: R(1487, 361, 66, 66), rows: [[t('IA7')]], entrance: P(1520, 340), walkway: 'top' },
+      { rect: R(1428, 493, 134, 52), rows: [[t('IA3')]], entrance: P(1495, 585), walkway: 'bottom' },
+      { rect: R(1603, 395, 63, 162), rows: [[t('IA6')], [t('IA5')], [t('IA4 (ROC)')]], entrance: P(1590, 585), walkway: 'left' },
     ],
     entrance: P(1335, 440),
     door: P(1347, 440),
@@ -427,7 +427,7 @@ export const GROUND: Shape[] = [
   { kind: 'rect', rect: R(1225, 1042, 400, 90), fill: PAVE, rx: 8 },
   { kind: 'rect', rect: R(600, 478, 250, 50), fill: PAVE },
   { kind: 'rect', rect: R(830, 380, 270, 155), fill: PAVE, rx: 8 }, // plaza between the gyms
-  { kind: 'rect', rect: R(1425, 350, 140, 140), fill: '#8E9599' },  // the IA work yard (asphalt)
+  { kind: 'rect', rect: R(1425, 350, 175, 140), fill: '#8E9599' },  // the IA work yard (asphalt)
   { kind: 'rect', rect: R(1255, 400, 92, 100), fill: '#8E9599' },   // drive west of the cafeteria
   { kind: 'rect', rect: R(1290, 500, 57, 80), fill: PAVE },         // walk down to the plaza
   { kind: 'rect', rect: R(1347, 545, 313, 62), fill: PAVE, rx: 6 }, // plaza south of the cafeteria
