@@ -417,8 +417,21 @@ export function CartoonMap({
             );
           })}
 
-          {/* Buildings */}
-          {LAYOUTS.map((l) => {
+          {/* Buildings — quiet ones first, then the ones in play, then the one
+              we're standing in, so whatever matters is always on top */}
+          {[...LAYOUTS]
+            .map((l, i) => ({ l, i }))
+            .sort((a, b) => {
+              const rank = (x: BuildingLayout) => {
+                if (x.key === selected) return 4;
+                if (current && x.key === current.buildingKey && view !== 'week') return 3;
+                if (isLit(x.key)) return 2;
+                return 1;
+              };
+              return rank(a.l) - rank(b.l) || a.i - b.i;
+            })
+            .map(({ l }) => l)
+            .map((l) => {
             const info = infoByKey.get(l.key);
             const lit = isLit(l.key);
             const name = bLabel(campus, l.key);

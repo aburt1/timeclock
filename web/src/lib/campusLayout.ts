@@ -287,15 +287,16 @@ export const BUILDINGS: BuildingLayout[] = [
     // Upstairs of Admin — a row of classrooms along the quad side.
     key: 'a-loft',
     color: '#9AD0F5',
-    outline: [P(1229, 972), P(1583, 972), P(1583, 1000), P(1229, 1000)],
+    outline: [P(1229, 958), P(1583, 958), P(1583, 986), P(1229, 986)],
     frames: [
-      { rect: R(1229, 972, 354, 28), rows: [[t('Room 6 (ASB)'), t('Room 5 (ASB)'), t('Room 4'), t('Room 3'), t('Room 2'), t('Room 1 (Title I / EL)', 1.3)]] },
+      { rect: R(1229, 958, 354, 28), rows: [[t('Room 6 (ASB)'), t('Room 5 (ASB)'), t('Room 4'), t('Room 3'), t('Room 2'), t('Room 1 (Title I / EL)', 1.3)]] },
     ],
-    entrance: P(1400, 990),
+    entrance: P(1236, 990),
+    door: P(1236, 986),
     walkway: 'top',
     upstairs: true,
     nameplate: 'left',
-    nameAt: P(1180, 986),
+    nameAt: P(1180, 972),
   },
 ];
 
