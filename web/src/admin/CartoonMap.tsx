@@ -2,88 +2,79 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, bLabel, rLabel, type Campus, type Day, type Group, type Signup } from '../lib/api';
 import {
   BUILDINGS as LAYOUTS,
-  FOUNTAIN,
   HOME,
+  LANDMARKS,
   MAP_H,
   MAP_W,
-  QUAD,
   SIDEWALKS,
   TREES,
+  buildingParts,
   center,
+  cumulative,
   layoutTiles,
-  offsetRight,
-  perimeterLoop,
-  pointAlong,
+  partSpine,
+  pointAtDistance,
+  roomDoor,
   roomRect,
   routeAlongSidewalks,
+  spineEntry,
   type BuildingLayout,
   type Pt,
   type Rect,
 } from '../lib/campusLayout';
 
-// Group A is crimson, not green: a green route disappears against the grass.
-const GROUP_COLOR: Record<Group, string> = { A: '#C2255C', B: '#1976D2' };
-const GROUP_LABEL: Record<Group, string> = { A: 'Group A · slow walkers', B: 'Group B · standard route' };
+/*
+ * Shown to the class on the board, so it is built to be read across a room:
+ * nothing moves on its own, one group's walk at a time, the path goes down the
+ * hallway and into each classroom door, and the slider walks it step by step.
+ */
+
+const GROUP_COLOR: Record<Group, string> = { A: '#C2255C', B: '#1565C0' };
+const GROUP_NAME: Record<Group, string> = { A: 'Group A', B: 'Group B' };
+const GROUP_SUB: Record<Group, string> = { A: 'Slow walkers', B: 'Standard route' };
+const HOME_COLOR = '#F9A825';
+const QUIET_FILL = '#C3DCB2';
+const QUIET_INK = '#63805A';
 
 type View = Day | 'week';
-
 type Rename = { key: string; title: string; base: string; current: string; at: Pt };
-
-/* ---------- colour helpers ---------- */
+type Stop = { signup: Signup; buildingKey: string; label: string; who: string; door: Pt; at: number };
 
 function shade(hex: string, amt: number): string {
   const n = parseInt(hex.slice(1), 16);
   const ch = (v: number) => Math.max(0, Math.min(255, Math.round(v + 255 * amt)));
-  const r = ch(n >> 16), g = ch((n >> 8) & 255), b = ch(n & 255);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  return `#${((ch(n >> 16) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255)).toString(16).padStart(6, '0')}`;
 }
 
-/* ---------- text fitting ---------- */
-
-function fitText(label: string, w: number, h: number): { lines: string[]; size: number } {
-  const avail = w - 8;
-  const one = Math.min(h * 0.5, 16, (avail * 1.85) / Math.max(1, label.length));
-  if (one >= 9.5 || !label.includes(' ')) return { lines: [label], size: Math.max(7, one) };
-  // split into two lines at the space nearest the middle
+function fitText(label: string, w: number, h: number, max: number) {
+  const avail = w - 10;
+  const one = Math.min(h * 0.6, max, (avail * 1.9) / Math.max(1, label.length));
+  if (one >= max * 0.6 || !label.includes(' ')) return { lines: [label], size: Math.max(9, one) };
   const words = label.split(' ');
-  let best = 0, bestDiff = Infinity;
+  let cut = 1, bestDiff = Infinity;
   for (let i = 1; i < words.length; i++) {
-    const a = words.slice(0, i).join(' ').length, b = words.slice(i).join(' ').length;
-    const diff = Math.abs(a - b);
-    if (diff < bestDiff) { bestDiff = diff; best = i; }
+    const diff = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length);
+    if (diff < bestDiff) { bestDiff = diff; cut = i; }
   }
-  const lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+  const lines = [words.slice(0, cut).join(' '), words.slice(cut).join(' ')];
   const longest = Math.max(...lines.map((l) => l.length));
-  const two = Math.min(h * 0.36, 14, (avail * 1.85) / longest);
-  return { lines, size: Math.max(7, two) };
+  return { lines, size: Math.max(9, Math.min(h * 0.4, max * 0.8, (avail * 1.9) / longest)) };
 }
 
-function TileText({ label, rect, fill = '#1A2733', weight = 700 }: { label: string; rect: Rect; fill?: string; weight?: number }) {
-  const { lines, size } = fitText(label, rect.w, rect.h);
+function TileText({ label, rect, fill, max = 22, weight = 800 }: { label: string; rect: Rect; fill: string; max?: number; weight?: number }) {
+  const { lines, size } = fitText(label, rect.w, rect.h, max);
   const c = center(rect);
-  const lh = size * 1.1;
+  const lh = size * 1.12;
   const y0 = c.y - ((lines.length - 1) * lh) / 2;
   return (
     <text textAnchor="middle" fontSize={size} fontWeight={weight} fill={fill} style={{ pointerEvents: 'none' }}>
-      {lines.map((l, i) => (
-        <tspan key={i} x={c.x} y={y0 + i * lh + size * 0.36}>
-          {l}
-        </tspan>
-      ))}
+      {lines.map((l, i) => <tspan key={i} x={c.x} y={y0 + i * lh + size * 0.35}>{l}</tspan>)}
     </text>
   );
 }
 
-/* ---------- main component ---------- */
-
 export function CartoonMap({
-  campus,
-  signups,
-  view,
-  onViewChange,
-  selected,
-  onSelect,
-  onLabelsChange,
+  campus, signups, view, onViewChange, selected, onSelect, onLabelsChange,
 }: {
   campus: Campus;
   signups: Signup[];
@@ -93,81 +84,113 @@ export function CartoonMap({
   onSelect: (key: string | null) => void;
   onLabelsChange: (labels: Record<string, string>) => void;
 }) {
-  const [hover, setHover] = useState<string | null>(null);
-  const [personHover, setPersonHover] = useState<Signup | null>(null);
+  const [group, setGroup] = useState<Group>('A');
   const [rename, setRename] = useState<Rename | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const [walked, setWalked] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
   const layoutByKey = useMemo(() => new Map(LAYOUTS.map((l) => [l.key, l])), []);
   const infoByKey = useMemo(() => new Map(campus.buildings.map((b) => [b.key, b])), [campus]);
 
-  const active = useMemo(() => {
-    const m = new Map<string, Group>();
-    for (const b of campus.buildings) if (view === 'week' || b.day === view) m.set(b.key, b.group);
-    return m;
-  }, [campus, view]);
+  /** The walk: out the door, down each hallway, into every classroom with a bin. */
+  const plan = useMemo(() => {
+    if (view === 'week') return null;
+    const todays = campus.buildings.filter((b) => b.day === view && b.group === group);
+    const pts: Pt[] = [...HOME.path];
+    const stops: Stop[] = [];
+    const marks: Array<{ index: number; stop: Omit<Stop, 'at'> }> = [];
+    let cur = HOME.door;
+    const visited: string[] = [];
 
-  const routes = useMemo(() => {
-    if (view === 'week') return [];
-    const out: Array<{ group: Group; pts: Pt[]; lap?: boolean }> = [];
-    for (const g of ['A', 'B'] as Group[]) {
-      const todays = campus.buildings.filter((b) => b.day === view && b.group === g);
-      const stops = todays.map((b) => layoutByKey.get(b.key)?.entrance).filter((p): p is Pt => !!p);
-      if (!stops.length) continue;
-
-      // Collecting the building we already live in: walk a lap around it,
-      // otherwise the route is a stub hidden under the classrooms.
-      if (todays.length === 1 && todays[0].key === HOME.building) {
-        const home = layoutByKey.get(HOME.building);
-        if (home) {
-          const room = roomRect(home, HOME.room);
-          const start = room ? center(room) : HOME.path[0];
-          out.push({ group: g, pts: perimeterLoop(home.rect, start), lap: true });
-          continue;
-        }
-      }
-
-      let pts: Pt[] = [...HOME.path];
-      let cur = HOME.door;
-      for (const s of [...stops, HOME.door]) {
-        const leg = routeAlongSidewalks(cur, s);
-        pts = pts.concat(leg.slice(1));
-        cur = s;
-      }
-      pts = pts.concat([...HOME.path].reverse().slice(1));
-      // Lanes: A hugs the centre, B walks the outer lane; out/back on opposite sides.
-      out.push({ group: g, pts: offsetRight(pts, g === 'A' ? 6 : 15) });
-    }
-    return out;
-  }, [campus, view, layoutByKey]);
-
-  // People placed on the map: [signup, point]
-  const people = useMemo(() => {
-    const out: Array<{ s: Signup; p: Pt }> = [];
-    const perTile = new Map<string, number>();
-    for (const s of signups) {
-      const l = layoutByKey.get(s.building);
+    for (const b of todays) {
+      const l = layoutByKey.get(b.key);
       if (!l) continue;
-      const rr = s.isCustom ? null : roomRect(l, s.room);
-      const tileKey = rr ? `${s.building}|${s.room}` : `${s.building}|*`;
-      const n = perTile.get(tileKey) ?? 0;
-      perTile.set(tileKey, n + 1);
-      const base = rr ? { x: rr.x + rr.w - 12, y: rr.y + rr.h - 12 } : { x: l.rect.x + l.rect.w - 18, y: l.rect.y + l.rect.h - 14 };
-      out.push({ s, p: { x: base.x - 6 - n * 26, y: base.y - 4 } });
+      const mine = signups.filter((s) => s.building === b.key);
+      if (!mine.length) continue;
+      visited.push(b.key);
+
+      pts.push(...routeAlongSidewalks(cur, l.entrance).slice(1));
+      cur = l.entrance;
+
+      for (const part of buildingParts(l)) {
+        const tiles = layoutTiles(part.rect, part.rows).filter((t) => 'room' in t) as Array<{ room: string; rect: Rect }>;
+        const here = mine.filter((s) => !s.isCustom && tiles.some((t) => t.room === s.room));
+        if (!here.length) continue;
+        const spine = partSpine(part, l.entrance);
+        const entry = spineEntry(spine, cur);
+        pts.push(entry);
+        const doors = here
+          .map((s) => ({ s, ...roomDoor(tiles.find((t) => t.room === s.room)!.rect, spine) }))
+          .sort((a, z) => Math.hypot(a.hall.x - entry.x, a.hall.y - entry.y) - Math.hypot(z.hall.x - entry.x, z.hall.y - entry.y));
+        for (const d of doors) {
+          pts.push(d.hall, d.door);
+          marks.push({ index: pts.length - 1, stop: { signup: d.s, buildingKey: b.key, label: d.s.roomLabel, who: d.s.name, door: d.door } });
+          pts.push(d.hall);
+        }
+        pts.push(entry);
+      }
+
+      pts.push(l.entrance);
+      for (const c of mine.filter((s) => s.isCustom)) {
+        marks.push({ index: pts.length - 1, stop: { signup: c, buildingKey: b.key, label: c.roomLabel, who: c.name, door: l.entrance } });
+      }
+      cur = l.entrance;
     }
-    return out;
-  }, [signups, layoutByKey]);
 
-  const roomsWithBins = useMemo(() => new Set(signups.filter((s) => !s.isCustom).map((s) => `${s.building}|${s.room}`)), [signups]);
-  const countByBuilding = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const s of signups) m.set(s.building, (m.get(s.building) ?? 0) + 1);
-    return m;
-  }, [signups]);
+    if (!visited.length) return { pts: [], stops: [], total: 0, visited };
+    pts.push(...routeAlongSidewalks(cur, HOME.door).slice(1));
+    pts.push(...[...HOME.path].reverse().slice(1));
 
-  const focus = hover ?? selected;
-  const focusInfo = focus ? infoByKey.get(focus) : null;
+    const cum = cumulative(pts);
+    for (const m of marks) stops.push({ ...m.stop, at: cum[m.index] });
+    return { pts, stops, total: cum[cum.length - 1], visited };
+  }, [campus, view, group, signups, layoutByKey]);
+
+  const total = plan?.total ?? 0;
+
+  useEffect(() => { setWalked(0); setPlaying(false); }, [view, group]);
+
+  // The slider can auto-advance, but only while the teacher holds Play.
+  const raf = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!playing || !total) return;
+    let last = performance.now();
+    const speed = total / 16000; // a full lap in ~16s
+    const tick = (now: number) => {
+      const next = walkedRef.current + (now - last) * speed;
+      last = now;
+      if (next >= total) { setWalked(total); setPlaying(false); return; }
+      setWalked(next);
+      raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [playing, total]);
+  const walkedRef = useRef(walked);
+  walkedRef.current = walked;
+
+  const litKeys = useMemo(() => {
+    if (view === 'week') return null;
+    return new Set(plan?.visited ?? []);
+  }, [plan, view]);
+  const isLit = (key: string) => (litKeys ? litKeys.has(key) : true);
+
+  const doneStops = plan ? plan.stops.filter((s) => s.at <= walked + 1).length : 0;
+  const current = plan?.stops[Math.min(doneStops, plan.stops.length - 1)];
+  const atStop = plan?.stops.find((s) => Math.abs(s.at - walked) < 12);
+
+  const walker = plan && plan.pts.length ? pointAtDistance(plan.pts, walked) : null;
+  const walkedPath = useMemo(() => {
+    if (!plan || !plan.pts.length) return '';
+    const cum = cumulative(plan.pts);
+    const out: Pt[] = [];
+    for (let i = 0; i < plan.pts.length; i++) {
+      if (cum[i] <= walked) out.push(plan.pts[i]);
+      else break;
+    }
+    if (walker) out.push(walker);
+    return out.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
+  }, [plan, walked, walker]);
 
   useEffect(() => {
     if (!rename) return;
@@ -175,14 +198,6 @@ export function CartoonMap({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [rename]);
-
-  function svgPointToPercent(p: Pt): { left: string; top: string } {
-    return { left: `${(p.x / MAP_W) * 100}%`, top: `${(p.y / MAP_H) * 100}%` };
-  }
-
-  function openRename(key: string, title: string, base: string, at: Pt) {
-    setRename({ key, title, base, current: campus.labels[key] ?? base, at });
-  }
 
   async function saveRename(value: string) {
     if (!rename) return;
@@ -192,363 +207,353 @@ export function CartoonMap({
     setRename(null);
   }
 
+  const stopNumber = (s: Stop) => (plan ? plan.stops.indexOf(s) + 1 : 0);
+
   return (
     <div className="flex flex-col gap-3">
-      {/* Day tabs + legend */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* Day */}
+      <div className="flex flex-wrap gap-2">
         {campus.days.map((d) => (
-          <button key={d} type="button" onClick={() => onViewChange(d)} className={`text-sm font-bold rounded-xl px-4 py-2 border-2 ${view === d ? 'bg-rtc-ink border-rtc-ink text-white' : 'bg-white border-slate-200 text-rtc-gray'}`}>
+          <button key={d} type="button" onClick={() => onViewChange(d)}
+            className={`text-base font-black rounded-xl px-5 py-2.5 border-2 ${view === d ? 'bg-rtc-ink border-rtc-ink text-white' : 'bg-white border-slate-300 text-rtc-gray'}`}>
             {d}
           </button>
         ))}
-        <button type="button" onClick={() => onViewChange('week')} className={`text-sm font-bold rounded-xl px-4 py-2 border-2 ${view === 'week' ? 'bg-rtc-ink border-rtc-ink text-white' : 'bg-white border-slate-200 text-rtc-gray'}`}>
+        <button type="button" onClick={() => onViewChange('week')}
+          className={`text-base font-black rounded-xl px-5 py-2.5 border-2 ${view === 'week' ? 'bg-rtc-ink border-rtc-ink text-white' : 'bg-white border-slate-300 text-rtc-gray'}`}>
           Whole week
         </button>
-        <div className="ml-auto flex items-center gap-4 text-xs font-bold text-rtc-gray">
-          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: GROUP_COLOR.A }} /> Group A</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: GROUP_COLOR.B }} /> Group B</span>
-          <span>🏳️ Home (DA4)</span>
-        </div>
       </div>
 
-      <div ref={wrapRef} className="relative rounded-3xl overflow-hidden border-4 border-white shadow-md" style={{ background: '#8FCB6B' }}>
-        <svg ref={svgRef} viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="w-full h-auto block select-none" role="img" aria-label="Illustrated campus map with pickup routes">
-          <defs>
-            <pattern id="grass" width="46" height="46" patternUnits="userSpaceOnUse">
-              <rect width="46" height="46" fill="#8FCB6B" />
-              <circle cx="10" cy="12" r="3" fill="#9BD478" />
-              <circle cx="32" cy="30" r="4" fill="#84C262" />
-              <circle cx="24" cy="6" r="2" fill="#9BD478" />
-              <path d="M6 36 q3 -6 6 0" stroke="#7DBB5B" strokeWidth="2" fill="none" />
-              <path d="M36 12 q3 -6 6 0" stroke="#7DBB5B" strokeWidth="2" fill="none" />
-            </pattern>
-            <pattern id="stripes" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="7" height="14" fill="rgba(255,255,255,0.35)" />
-            </pattern>
-            <filter id="soft" x="-10%" y="-10%" width="120%" height="130%">
-              <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#2f5a1f" floodOpacity="0.28" />
-            </filter>
-            <style>{`
-              @keyframes rtc-walk { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
-              @keyframes rtc-dots { to { stroke-dashoffset: -28; } }
-              .rtc-route { animation: rtc-dots 1.6s linear infinite; }
-              .rtc-walker { animation: rtc-walk 0.7s ease-in-out infinite; }
-              @media (prefers-reduced-motion: reduce) { .rtc-route, .rtc-walker { animation: none; } }
-            `}</style>
-          </defs>
+      {/* Group — one walk at a time keeps the board readable */}
+      {view !== 'week' && (
+        <div className="grid grid-cols-2 gap-3">
+          {(['A', 'B'] as Group[]).map((g) => {
+            const on = group === g;
+            const n = campus.buildings.filter((b) => b.day === view && b.group === g).length;
+            return (
+              <button key={g} type="button" onClick={() => setGroup(g)}
+                className="rounded-2xl px-5 py-3 text-left border-4"
+                style={{ borderColor: on ? GROUP_COLOR[g] : '#E2E8F0', background: on ? GROUP_COLOR[g] : '#fff', color: on ? '#fff' : '#6B7A87' }}>
+                <div className="text-xl font-black leading-tight">{GROUP_NAME[g]}</div>
+                <div className="text-sm font-bold opacity-90">{GROUP_SUB[g]} · {n} building{n === 1 ? '' : 's'}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-          {/* Ground */}
-          <rect x={0} y={0} width={MAP_W} height={MAP_H} fill="url(#grass)" />
+      {/* Map */}
+      <div className="relative rounded-3xl overflow-hidden border-4 border-white shadow-md" style={{ background: '#A8D68A' }}>
+        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="w-full h-auto block select-none" role="img"
+          aria-label={view === 'week' ? 'Campus map' : `${view} ${GROUP_NAME[group]} walking route`}>
+          <rect x={0} y={0} width={MAP_W} height={MAP_H} fill="#A8D68A" />
 
-          {/* Quad lawn */}
-          <rect x={QUAD.x} y={QUAD.y} width={QUAD.w} height={QUAD.h} rx={40} fill="#7DBE5A" />
-          <rect x={QUAD.x + 14} y={QUAD.y + 14} width={QUAD.w - 28} height={QUAD.h - 28} rx={30} fill="none" stroke="#9BD478" strokeWidth={4} strokeDasharray="10 12" />
-          <text x={QUAD.x + QUAD.w / 2} y={QUAD.y + QUAD.h - 24} textAnchor="middle" fontSize={20} fontWeight={800} fill="#4E8A34">Quad</text>
-          {/* Fountain */}
-          <circle cx={FOUNTAIN.x} cy={FOUNTAIN.y} r={30} fill="#7FB8E5" stroke="#E7EEF3" strokeWidth={6} />
-          <circle cx={FOUNTAIN.x} cy={FOUNTAIN.y} r={12} fill="#BFE0F7" />
-          <circle cx={FOUNTAIN.x} cy={FOUNTAIN.y} r={4} fill="#FFFFFF" />
+          {LANDMARKS.map((lm, i) => <Landmark key={i} lm={lm} />)}
 
-          {/* Sidewalks */}
           {SIDEWALKS.map((s, i) => (
-            <line key={`o${i}`} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#CDB98A" strokeWidth={46} strokeLinecap="round" />
+            <line key={i} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#F1E7CC" strokeWidth={40} strokeLinecap="round" />
           ))}
-          {SIDEWALKS.map((s, i) => (
-            <line key={`i${i}`} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#EBDDB6" strokeWidth={38} strokeLinecap="round" />
+
+          {TREES.filter((_, i) => i % 3 === 0).map((tr, i) => (
+            <g key={i} pointerEvents="none">
+              <circle cx={tr.x} cy={tr.y} r={(tr.r ?? 22) * 0.9} fill="#63AC4E" />
+              <circle cx={tr.x - 6} cy={tr.y - 6} r={(tr.r ?? 22) * 0.5} fill="#7BC565" />
+            </g>
           ))}
 
           {/* Buildings */}
           {LAYOUTS.map((l) => {
             const info = infoByKey.get(l.key);
-            const grp = active.get(l.key);
-            const dim = view !== 'week' && !grp;
-            const isFocus = focus === l.key;
-            const outline = grp ? GROUP_COLOR[grp] : isFocus ? '#1A2733' : undefined;
+            const lit = isLit(l.key);
             const name = bLabel(campus, l.key);
-            const footprints: Array<{ rect: Rect; rows?: BuildingLayout['rows']; main: boolean }> = [
+            const gcolor = info ? GROUP_COLOR[info.group] : '#1A2733';
+            const parts: Array<{ rect: Rect; rows?: BuildingLayout['rows']; main: boolean }> = [
               { rect: l.rect, rows: l.rows, main: true },
               ...(l.annex ?? []).map((a) => ({ rect: a.rect, rows: a.rows, main: false })),
             ];
             return (
-              <g
-                key={l.key}
-                opacity={dim ? 0.55 : 1}
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={() => setHover(l.key)}
-                onMouseLeave={() => setHover(null)}
+              <g key={l.key} style={{ cursor: 'pointer' }}
                 onClick={() => onSelect(selected === l.key ? null : l.key)}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  openRename(`b:${l.key}`, 'Rename building', info?.name ?? l.key, { x: l.rect.x + l.rect.w / 2, y: l.rect.y });
-                }}
-              >
-                {footprints.map(({ rect, rows, main }, fi) => {
-                  const wall = shade(l.color, -0.16);
-                  const tiles = rows ? layoutTiles(rect, rows) : [];
-                  return (
-                    <g key={fi}>
-                      {/* shadow + walls + roof */}
-                      <rect x={rect.x + 6} y={rect.y + 10} width={rect.w} height={rect.h} rx={18} fill="#2f5a1f" opacity={0.22} />
-                      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={18} fill={wall} />
-                      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h - 8} rx={18} fill={l.color} />
-                      {l.style === 'gym' && main && (
-                        <rect x={rect.x + 10} y={rect.y + 10} width={rect.w - 20} height={rect.h - 28} rx={12} fill="url(#stripes)" />
-                      )}
-                      {l.approx && (
-                        <rect x={rect.x - 5} y={rect.y - 5} width={rect.w + 10} height={rect.h + 10} rx={22} fill="none" stroke="#1A2733" strokeWidth={2} strokeDasharray="8 8" opacity={0.5} />
-                      )}
-                      {/* group outline */}
-                      {outline && (
-                        <rect x={rect.x - 4} y={rect.y - 4} width={rect.w + 8} height={rect.h + 8} rx={22} fill="none" stroke={outline} strokeWidth={isFocus ? 8 : 5} opacity={0.95} />
-                      )}
-                      {/* tiles */}
-                      {tiles.map((tile, ti) => {
-                        if ('corridor' in tile) {
-                          const r = tile.rect;
-                          return (
-                            <g key={ti}>
-                              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={6} fill={shade(l.color, -0.08)} />
-                              {main && <TileText label={name} rect={r} fill={shade(l.color, -0.45)} weight={800} />}
-                            </g>
-                          );
-                        }
-                        const r = tile.rect;
-                        const isHome = l.key === HOME.building && tile.room === HOME.room;
-                        const hasBin = roomsWithBins.has(`${l.key}|${tile.room}`);
-                        const label = rLabel(campus, l.key, tile.room);
+                onDoubleClick={(e) => { e.stopPropagation(); setRename({ key: `b:${l.key}`, title: 'Rename building', base: info?.name ?? l.key, current: name, at: { x: l.rect.x + l.rect.w / 2, y: l.rect.y } }); }}>
+                {parts.map(({ rect, rows }, pi) => (
+                  <g key={pi}>
+                    <rect x={rect.x + 5} y={rect.y + 8} width={rect.w} height={rect.h} rx={18} fill="#000" opacity={0.12} />
+                    <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={18} fill={lit ? l.color : QUIET_FILL} />
+                    {lit && <rect x={rect.x - 5} y={rect.y - 5} width={rect.w + 10} height={rect.h + 10} rx={23} fill="none" stroke={gcolor} strokeWidth={7} />}
+                    {lit && rows && layoutTiles(rect, rows).map((tile, ti) => {
+                      if ('corridor' in tile) {
+                        const c = tile.rect;
                         return (
-                          <g
-                            key={ti}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              openRename(`r:${l.key}|${tile.room}`, 'Rename room', tile.room, { x: r.x + r.w / 2, y: r.y });
-                            }}
-                          >
-                            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={7} fill={isHome ? '#FFE27A' : shade(l.color, 0.22)} stroke={isHome ? '#E0A800' : shade(l.color, -0.1)} strokeWidth={isHome ? 3 : 1.5} />
-                            <TileText label={label} rect={r} />
-                            {hasBin && <BinIcon x={r.x + 4} y={r.y + 4} />}
+                          <g key={ti}>
+                            <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={6} fill="#FBF6E6" stroke={shade(l.color, -0.15)} strokeWidth={2} />
                           </g>
                         );
-                      })}
-                      {/* name pill for buildings without a corridor row */}
-                      {main && !l.rows.includes('corridor') && (
-                        <g>
-                          <rect x={rect.x + 8} y={rect.y - 14} width={Math.min(rect.w - 16, name.length * 9 + 22)} height={24} rx={12} fill="#FFFFFF" stroke={shade(l.color, -0.3)} strokeWidth={2} />
-                          <text x={rect.x + 19} y={rect.y + 3} fontSize={14} fontWeight={800} fill="#1A2733">{name.length * 9 + 22 > rect.w - 16 ? name.slice(0, Math.floor((rect.w - 40) / 9)) + '…' : name}</text>
+                      }
+                      const r = tile.rect;
+                      const isHome = l.key === HOME.building && tile.room === HOME.room;
+                      const stop = plan?.stops.find((s) => s.buildingKey === l.key && s.signup.room === tile.room && !s.signup.isCustom);
+                      return (
+                        <g key={ti} onDoubleClick={(e) => { e.stopPropagation(); setRename({ key: `r:${l.key}|${tile.room}`, title: 'Rename room', base: tile.room, current: rLabel(campus, l.key, tile.room), at: { x: r.x + r.w / 2, y: r.y } }); }}>
+                          <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={8}
+                            fill={isHome ? '#FFE9A8' : stop ? '#FFFFFF' : shade(l.color, 0.2)}
+                            stroke={isHome ? HOME_COLOR : stop ? gcolor : shade(l.color, -0.08)}
+                            strokeWidth={isHome || stop ? 5 : 1.5} />
+                          <TileText label={rLabel(campus, l.key, tile.room)} rect={r} fill="#1A2733" max={stop ? 26 : 17} weight={stop ? 900 : 700} />
                         </g>
-                      )}
-                    </g>
-                  );
-                })}
-                {/* week-view day tag + count badge */}
+                      );
+                    })}
+                  </g>
+                ))}
+
+                {/* Name plate */}
                 {(() => {
-                  const c = center(l.rect);
-                  const n = countByBuilding.get(l.key) ?? 0;
-                  const g = info?.group;
-                  if (view !== 'week' && !grp && n === 0) return null;
+                  const h = lit ? 44 : 30;
+                  const w = Math.min(l.rect.w + 40, name.length * (lit ? 18 : 12) + 40);
+                  const x = l.rect.x + l.rect.w / 2 - w / 2;
                   return (
                     <g pointerEvents="none">
-                      {view === 'week' && info && (
-                        <g>
-                          <rect x={l.rect.x + l.rect.w - 62} y={l.rect.y - 12} width={54} height={24} rx={12} fill={GROUP_COLOR[info.group]} stroke="white" strokeWidth={3} />
-                          <text x={l.rect.x + l.rect.w - 35} y={l.rect.y + 5} textAnchor="middle" fontSize={13} fontWeight={900} fill="white">{info.day.slice(0, 3)}</text>
-                        </g>
-                      )}
-                      {n > 0 && g && (
-                        <g>
-                          <circle cx={l.rect.x + l.rect.w - 4} cy={l.rect.y + l.rect.h - 4} r={20} fill={GROUP_COLOR[g]} stroke="white" strokeWidth={4} />
-                          <text x={l.rect.x + l.rect.w - 4} y={l.rect.y + l.rect.h + 3} textAnchor="middle" fontSize={20} fontWeight={900} fill="white">{n}</text>
-                          <title>{`${n} sign-up${n === 1 ? '' : 's'}`}</title>
-                        </g>
-                      )}
-                      {c && null}
+                      <rect x={x} y={l.rect.y - h / 2 - 6} width={w} height={h} rx={h / 2} fill={lit ? '#FFFFFF' : '#D3E5C6'} stroke={lit ? gcolor : 'none'} strokeWidth={5} />
+                      <TileText label={name} rect={{ x, y: l.rect.y - h / 2 - 6, w, h }} fill={lit ? '#1A2733' : QUIET_INK} max={lit ? 28 : 18} weight={900} />
                     </g>
                   );
                 })()}
+
+                {view === 'week' && info && (
+                  <g pointerEvents="none">
+                    <rect x={l.rect.x + l.rect.w - 104} y={l.rect.y + l.rect.h - 18} width={100} height={40} rx={20} fill={GROUP_COLOR[info.group]} stroke="white" strokeWidth={4} />
+                    <text x={l.rect.x + l.rect.w - 54} y={l.rect.y + l.rect.h + 10} textAnchor="middle" fontSize={22} fontWeight={900} fill="white">
+                      {info.day.slice(0, 3)} · {info.group}
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}
 
-          {/* Doorways */}
-          {LAYOUTS.map((l) => (
-            <circle key={`door-${l.key}`} cx={l.entrance.x} cy={l.entrance.y} r={7} fill="#B89A63" stroke="#EBDDB6" strokeWidth={2} pointerEvents="none" />
-          ))}
+          {/* The walk */}
+          {plan && plan.pts.length > 0 && (
+            <g pointerEvents="none">
+              <path d={plan.pts.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ')} fill="none" stroke="#FFFFFF" strokeWidth={24} strokeLinejoin="round" strokeLinecap="round" />
+              <path d={plan.pts.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ')} fill="none" stroke={GROUP_COLOR[group]} strokeWidth={12} strokeLinejoin="round" strokeLinecap="round" opacity={0.28} />
+              {walkedPath && <path d={walkedPath} fill="none" stroke={GROUP_COLOR[group]} strokeWidth={12} strokeLinejoin="round" strokeLinecap="round" />}
+            </g>
+          )}
 
-          {/* Trees */}
-          {TREES.map((tr, i) => (
-            <Tree key={i} x={tr.x} y={tr.y} r={tr.r ?? 22} />
-          ))}
-
-          {/* Routes */}
-          {routes.map((r) => {
-            const d = r.pts.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
-            const walker = pointAlong(r.pts, r.lap ? 0.62 : r.group === 'A' ? 0.3 : 0.25);
+          {/* Numbered classroom stops */}
+          {plan?.stops.map((s) => {
+            const n = stopNumber(s);
+            const done = s.at <= walked + 1;
+            const here = atStop === s;
             return (
-              <g key={r.group} pointerEvents="none">
-                <path d={d} fill="none" stroke="white" strokeWidth={11} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
-                <path d={d} fill="none" stroke={GROUP_COLOR[r.group]} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="1 13" className="rtc-route" />
-                <Walkers x={walker.x} y={walker.y} color={GROUP_COLOR[r.group]} label={r.group} />
+              <g key={s.signup.id} pointerEvents="none">
+                <circle cx={s.door.x} cy={s.door.y} r={here ? 24 : 19}
+                  fill={done ? GROUP_COLOR[group] : '#FFFFFF'} stroke={done ? '#FFFFFF' : GROUP_COLOR[group]} strokeWidth={5} />
+                <text x={s.door.x} y={s.door.y + (here ? 9 : 7)} textAnchor="middle" fontSize={here ? 26 : 21} fontWeight={900}
+                  fill={done ? '#FFFFFF' : GROUP_COLOR[group]}>{n}</text>
               </g>
             );
           })}
 
-          {/* Home flag */}
+          {/* Home */}
           {(() => {
             const l = layoutByKey.get(HOME.building);
             const r = l ? roomRect(l, HOME.room) : null;
             if (!r) return null;
-            const fx = r.x + 10, fy = r.y - 40;
+            const c = center(r);
             return (
               <g pointerEvents="none">
-                <line x1={fx} y1={fy} x2={fx} y2={r.y + 8} stroke="#5D4037" strokeWidth={4} strokeLinecap="round" />
-                <path d={`M${fx},${fy} l40,12 l-40,12 z`} fill="#E53935" stroke="white" strokeWidth={2} />
-                <text x={fx + 9} y={fy + 17} fontSize={14} fontWeight={900} fill="white">★</text>
-                <rect x={fx + 44} y={fy - 2} width={54} height={22} rx={11} fill="#FFE27A" stroke="#E0A800" strokeWidth={2} />
-                <text x={fx + 71} y={fy + 14} textAnchor="middle" fontSize={12} fontWeight={900} fill="#5D4037">HOME</text>
+                <circle cx={c.x} cy={c.y} r={34} fill={HOME_COLOR} stroke="white" strokeWidth={6} />
+                <text x={c.x} y={c.y + 12} textAnchor="middle" fontSize={32}>🏠</text>
               </g>
             );
           })()}
 
-          {/* People */}
-          {people.map(({ s, p }) => (
-            <Person key={s.id} x={p.x} y={p.y} name={s.name} color={s.group ? GROUP_COLOR[s.group] : '#6B7A87'} onEnter={() => setPersonHover(s)} onLeave={() => setPersonHover(null)} />
-          ))}
+          {/* Walker */}
+          {walker && (
+            <g pointerEvents="none">
+              <ellipse cx={walker.x} cy={walker.y + 30} rx={26} ry={7} fill="#000" opacity={0.18} />
+              <rect x={walker.x - 20} y={walker.y - 4} width={40} height={34} rx={16} fill={GROUP_COLOR[group]} stroke="white" strokeWidth={5} />
+              <circle cx={walker.x} cy={walker.y - 18} r={20} fill="#FFDDB8" stroke="white" strokeWidth={5} />
+              <path d={`M${walker.x - 20},${walker.y - 20} a20,20 0 0 1 40,0 z`} fill={GROUP_COLOR[group]} />
+              <rect x={walker.x + 14} y={walker.y + 2} width={26} height={26} rx={6} fill="#2E7D32" stroke="white" strokeWidth={4} />
+              <text x={walker.x + 27} y={walker.y + 22} textAnchor="middle" fontSize={17} fontWeight={900} fill="white">♻</text>
+            </g>
+          )}
         </svg>
 
-        {/* Building card */}
-        {focusInfo && !rename && (
-          <div className="absolute top-3 left-3 bg-white/95 backdrop-blur rounded-2xl shadow-lg border-2 border-slate-200 p-3 max-w-xs text-sm">
-            <div className="flex items-start gap-2">
-              <div className="min-w-0">
-                <div className="font-black text-rtc-ink leading-tight">{bLabel(campus, focusInfo)}</div>
-                <div className="text-xs font-bold mt-0.5" style={{ color: GROUP_COLOR[focusInfo.group] }}>
-                  {focusInfo.day}s · {GROUP_LABEL[focusInfo.group]}
-                </div>
-              </div>
-              {selected === focusInfo.key && (
-                <button type="button" onClick={() => onSelect(null)} className="ml-auto text-rtc-gray font-bold px-1" aria-label="Close">✕</button>
-              )}
-            </div>
-            {(() => {
-              const list = signups.filter((s) => s.building === focusInfo.key);
-              return list.length === 0 ? (
-                <div className="text-xs text-rtc-gray font-bold mt-2">No sign-ups here yet.</div>
-              ) : (
-                <ul className="mt-2 flex flex-col gap-0.5 max-h-40 overflow-y-auto">
-                  {list.map((s) => (
-                    <li key={s.id} className="flex justify-between gap-3">
-                      <span className="font-bold truncate">{s.roomLabel}</span>
-                      <span className="text-rtc-gray truncate">{s.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              );
-            })()}
-            <div className="text-[10px] text-rtc-gray mt-2">{selected === focusInfo.key ? 'Double-click to rename' : 'Click to pin · double-click to rename'}</div>
-          </div>
-        )}
-
-        {/* Person tooltip */}
-        {personHover && !rename && (
-          <div className="absolute bottom-3 left-3 bg-rtc-ink text-white rounded-xl shadow-lg px-3 py-2 text-xs font-bold pointer-events-none">
-            {personHover.name} · {personHover.roomLabel}{personHover.roomDetail ? ` — ${personHover.roomDetail}` : ''}
-          </div>
-        )}
-
-        {/* Rename popover */}
         {rename && (
-          <RenamePopover rename={rename} style={svgPointToPercent(rename.at)} onSave={saveRename} onCancel={() => setRename(null)} />
+          <RenamePopover rename={rename}
+            style={{ left: `${(rename.at.x / MAP_W) * 100}%`, top: `${(rename.at.y / MAP_H) * 100}%` }}
+            onSave={saveRename} onCancel={() => setRename(null)} />
         )}
       </div>
 
-      <p className="text-xs text-rtc-gray font-bold">
-        Tip: double-click any building or room to rename it — the new name shows up on the sign-up form and schedule too. Routes follow the sidewalks from DA4 and back.
+      {/* Walk-through control */}
+      {view !== 'week' && plan && (
+        plan.stops.length === 0 ? (
+          <div className="rounded-2xl border-4 border-slate-200 p-4 font-bold text-rtc-gray">
+            No bins signed up for {GROUP_NAME[group]} on {view} yet — nothing to walk.
+          </div>
+        ) : (
+          <div className="rounded-2xl border-4 p-4 flex flex-col gap-3" style={{ borderColor: GROUP_COLOR[group] }}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button type="button" onClick={() => { if (walked >= total) setWalked(0); setPlaying(!playing); }}
+                className="text-lg font-black rounded-xl px-6 py-3 text-white" style={{ background: GROUP_COLOR[group] }}>
+                {playing ? '⏸ Pause' : walked >= total ? '↻ Walk it again' : '▶ Walk the route'}
+              </button>
+              <div className="text-2xl font-black" style={{ color: GROUP_COLOR[group] }}>
+                {walked <= 0
+                  ? '🏠 Start at DA4'
+                  : walked >= total
+                    ? '🏠 Back at DA4 — all done!'
+                    : atStop
+                      ? `Stop ${stopNumber(atStop)}: ${atStop.label} · ${atStop.who}`
+                      : current
+                        ? `Walking to ${current.label}…`
+                        : 'Walking home…'}
+              </div>
+            </div>
+            <input type="range" min={0} max={Math.max(1, Math.round(total))} value={Math.round(walked)}
+              onChange={(e) => { setPlaying(false); setWalked(Number(e.target.value)); }}
+              className="w-full h-4 cursor-pointer" style={{ accentColor: GROUP_COLOR[group] }}
+              aria-label="Walk along the route" />
+            <ol className="flex flex-wrap items-stretch gap-2">
+              <Chip color={HOME_COLOR} ink="#4A3200" label="🏠 Start" sub="DA4" active={walked <= 0} />
+              {plan.stops.map((s) => (
+                <Chip key={s.signup.id} color={GROUP_COLOR[group]} ink="#fff" num={stopNumber(s)}
+                  label={s.label} sub={s.who} active={atStop === s} done={s.at <= walked + 1}
+                  onClick={() => { setPlaying(false); setWalked(s.at); }} />
+              ))}
+              <Chip color={HOME_COLOR} ink="#4A3200" label="🏠 Finish" sub="DA4" active={walked >= total} />
+            </ol>
+          </div>
+        )
+      )}
+
+      <p className="text-sm text-rtc-gray font-bold">
+        Double-click any building or room to rename it.
       </p>
     </div>
   );
 }
 
-/* ---------- little drawings ---------- */
+function Landmark({ lm }: { lm: { kind: string; rect: { x: number; y: number; w: number; h: number }; label: string } }) {
+  const { x, y, w, h } = lm.rect;
+  const cx = x + w / 2, cy = y + h / 2;
+  const cap = (fill: string, ink = '#3D5A32') => (
+    <text x={cx} y={y + h - 12} textAnchor="middle" fontSize={22} fontWeight={900} fill={ink} stroke={fill} strokeWidth={5} paintOrder="stroke">
+      {lm.label}
+    </text>
+  );
+  switch (lm.kind) {
+    case 'track':
+      return (
+        <g pointerEvents="none">
+          <rect x={x} y={y} width={w} height={h} rx={h / 2} fill="#C97B54" />
+          <rect x={x + 22} y={y + 22} width={w - 44} height={h - 44} rx={(h - 44) / 2} fill="#7CC061" />
+          {cap('#7CC061')}
+        </g>
+      );
+    case 'diamond':
+      return (
+        <g pointerEvents="none">
+          <path d={`M${x + 12},${y + h - 12} L${cx},${y + 16} L${x + w - 12},${y + h - 12} Z`} fill="#7CC061" />
+          <path d={`M${x + 60},${y + h - 40} L${cx},${y + 70} L${x + w - 60},${y + h - 40} Z`} fill="#D6A16B" />
+          {cap('#7CC061')}
+        </g>
+      );
+    case 'tennis':
+      return (
+        <g pointerEvents="none">
+          <rect x={x} y={y} width={w} height={h} rx={14} fill="#4E8FC7" />
+          {[0.33, 0.66].map((f) => <line key={f} x1={x + w * f} y1={y + 8} x2={x + w * f} y2={y + h - 8} stroke="white" strokeWidth={3} />)}
+          <line x1={x + 8} y1={cy} x2={x + w - 8} y2={cy} stroke="white" strokeWidth={3} />
+          {cap('#4E8FC7', '#FFFFFF')}
+        </g>
+      );
+    case 'pool':
+      return (
+        <g pointerEvents="none">
+          <rect x={x} y={y} width={w} height={h} rx={16} fill="#5FB4E5" stroke="#E9F3F8" strokeWidth={6} />
+          {cap('#5FB4E5', '#FFFFFF')}
+        </g>
+      );
+    case 'parking':
+      return (
+        <g pointerEvents="none">
+          <rect x={x} y={y} width={w} height={h} rx={14} fill="#9AA5A0" />
+          {Array.from({ length: Math.max(2, Math.floor(w / 60)) }, (_, i) => (
+            <line key={i} x1={x + 20 + i * 58} y1={y + 12} x2={x + 20 + i * 58} y2={y + h - 12} stroke="#E6EAE8" strokeWidth={4} />
+          ))}
+          {cap('#9AA5A0', '#FFFFFF')}
+        </g>
+      );
+    case 'amphitheatre':
+      return (
+        <g pointerEvents="none">
+          <rect x={x} y={y} width={w} height={h} rx={18} fill="#C9BBA0" />
+          {[0.25, 0.45, 0.65].map((f) => (
+            <path key={f} d={`M${x + 14},${y + h * f} Q${cx},${y + h * (f - 0.2)} ${x + w - 14},${y + h * f}`} fill="none" stroke="#EFE6D2" strokeWidth={7} />
+          ))}
+          {cap('#C9BBA0')}
+        </g>
+      );
+    case 'quad':
+    default:
+      return (
+        <g pointerEvents="none">
+          <rect x={x} y={y} width={w} height={h} rx={40} fill="#98CC78" />
+          {cap('#98CC78')}
+        </g>
+      );
+  }
+}
 
-function Tree({ x, y, r }: { x: number; y: number; r: number }) {
+function Chip({ color, ink, num, label, sub, active, done, onClick }: {
+  color: string; ink: string; num?: number; label: string; sub?: string;
+  active?: boolean; done?: boolean; onClick?: () => void;
+}) {
   return (
-    <g pointerEvents="none">
-      <ellipse cx={x + 4} cy={y + r * 0.9} rx={r * 0.9} ry={r * 0.35} fill="#2f5a1f" opacity={0.2} />
-      <circle cx={x} cy={y} r={r} fill="#4E9A3E" />
-      <circle cx={x - r * 0.35} cy={y - r * 0.3} r={r * 0.55} fill="#63B24E" />
-      <circle cx={x + r * 0.3} cy={y - r * 0.15} r={r * 0.4} fill="#7CC768" />
-    </g>
+    <li>
+      <button type="button" onClick={onClick} disabled={!onClick}
+        className={`flex items-center gap-2 rounded-2xl px-3 py-2 border-4 text-left ${active ? 'scale-105' : ''}`}
+        style={{
+          background: done || active ? color : '#fff',
+          color: done || active ? ink : '#6B7A87',
+          borderColor: active ? '#1A2733' : color,
+        }}>
+        {num !== undefined && (
+          <span className="flex items-center justify-center w-9 h-9 rounded-full text-lg font-black shrink-0"
+            style={{ background: done || active ? 'rgba(255,255,255,0.95)' : color, color: done || active ? color : '#fff' }}>
+            {num}
+          </span>
+        )}
+        <span className="leading-tight">
+          <span className="block text-lg font-black">{label}</span>
+          {sub && <span className="block text-xs font-bold opacity-90">{sub}</span>}
+        </span>
+      </button>
+    </li>
   );
 }
 
-function BinIcon({ x, y }: { x: number; y: number }) {
-  return (
-    <g pointerEvents="none">
-      <rect x={x} y={y + 3} width={13} height={14} rx={3} fill="#2E7D32" stroke="white" strokeWidth={1.5} />
-      <rect x={x - 1.5} y={y} width={16} height={4} rx={2} fill="#1B5E20" stroke="white" strokeWidth={1.2} />
-      <text x={x + 6.5} y={y + 14} textAnchor="middle" fontSize={9} fill="white" fontWeight={900}>♻</text>
-    </g>
-  );
-}
-
-function Person({ x, y, name, color, onEnter, onLeave }: { x: number; y: number; name: string; color: string; onEnter: () => void; onLeave: () => void }) {
-  const initials = name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
-  return (
-    <g style={{ cursor: 'default' }} onMouseEnter={onEnter} onMouseLeave={onLeave} transform={`translate(${x} ${y}) scale(1.6) translate(${-x} ${-y})`}>
-      <ellipse cx={x} cy={y + 12} rx={9} ry={3} fill="#000" opacity={0.15} />
-      <rect x={x - 9} y={y - 2} width={18} height={14} rx={7} fill={color} stroke="white" strokeWidth={2} />
-      <circle cx={x} cy={y - 8} r={9} fill="#FFDDB8" stroke="white" strokeWidth={2} />
-      <path d={`M${x - 9},${y - 9} a9,9 0 0 1 18,0 z`} fill={color} />
-      <text x={x} y={y + 8.5} textAnchor="middle" fontSize={8} fontWeight={900} fill="white">{initials}</text>
-    </g>
-  );
-}
-
-function Walkers({ x, y, color, label }: { x: number; y: number; color: string; label: string }) {
-  return (
-    <g className="rtc-walker" style={{ transformOrigin: `${x}px ${y}px` }}>
-      <g transform={`translate(${x} ${y}) scale(1.8) translate(${-x} ${-y})`}>
-      <ellipse cx={x} cy={y + 14} rx={26} ry={5} fill="#000" opacity={0.15} />
-      {/* bin */}
-      <rect x={x - 8} y={y - 4} width={16} height={16} rx={3} fill="#2E7D32" stroke="white" strokeWidth={2} />
-      <text x={x} y={y + 8} textAnchor="middle" fontSize={11} fontWeight={900} fill="white">♻</text>
-      {/* two students */}
-      <circle cx={x - 20} cy={y - 8} r={9} fill="#FFDDB8" stroke="white" strokeWidth={2} />
-      <path d={`M${x - 29},${y - 9} a9,9 0 0 1 18,0 z`} fill={color} />
-      <rect x={x - 28} y={y - 1} width={16} height={12} rx={6} fill={color} stroke="white" strokeWidth={2} />
-      <circle cx={x + 20} cy={y - 8} r={9} fill="#E8B58A" stroke="white" strokeWidth={2} />
-      <path d={`M${x + 11},${y - 9} a9,9 0 0 1 18,0 z`} fill={color} />
-      <rect x={x + 12} y={y - 1} width={16} height={12} rx={6} fill={color} stroke="white" strokeWidth={2} />
-      {/* group tag */}
-      <rect x={x - 12} y={y - 34} width={24} height={18} rx={9} fill="white" stroke={color} strokeWidth={2} />
-      <text x={x} y={y - 21} textAnchor="middle" fontSize={11} fontWeight={900} fill={color}>{label}</text>
-      </g>
-    </g>
-  );
-}
-
-function RenamePopover({ rename, style, onSave, onCancel }: { rename: Rename; style: { left: string; top: string }; onSave: (v: string) => void; onCancel: () => void }) {
+function RenamePopover({ rename, style, onSave, onCancel }: {
+  rename: Rename; style: { left: string; top: string }; onSave: (v: string) => void; onCancel: () => void;
+}) {
   const [value, setValue] = useState(rename.current);
   const [busy, setBusy] = useState(false);
   const overridden = rename.current !== rename.base;
   return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        await onSave(value);
-      }}
+    <form onSubmit={async (e) => { e.preventDefault(); setBusy(true); await onSave(value); }}
       className="absolute -translate-x-1/2 -translate-y-full bg-white rounded-2xl shadow-xl border-2 border-slate-200 p-3 w-64 flex flex-col gap-2 z-10"
-      style={{ ...style, marginTop: -8 }}
-      onClick={(e) => e.stopPropagation()}
-    >
+      style={{ ...style, marginTop: -8 }} onClick={(e) => e.stopPropagation()}>
       <div className="text-xs font-black text-rtc-gray">{rename.title}</div>
-      <input autoFocus type="text" value={value} onChange={(e) => setValue(e.target.value)} maxLength={60} className="border-2 border-blue-300 rounded-lg px-2 py-1.5 font-bold text-sm" onFocus={(e) => e.target.select()} />
+      <input autoFocus type="text" value={value} onChange={(e) => setValue(e.target.value)} maxLength={60}
+        onFocus={(e) => e.target.select()} className="border-2 border-blue-300 rounded-lg px-2 py-1.5 font-bold text-sm" />
       {overridden && <div className="text-[11px] text-rtc-gray">Original: <b>{rename.base}</b></div>}
       <div className="flex gap-2 justify-end">
-        {overridden && (
-          <button type="button" onClick={() => onSave('')} className="text-xs font-bold text-rtc-gray mr-auto underline">Reset</button>
-        )}
+        {overridden && <button type="button" onClick={() => onSave('')} className="text-xs font-bold text-rtc-gray mr-auto underline">Reset</button>}
         <button type="button" onClick={onCancel} className="text-xs font-bold text-rtc-gray px-2 py-1">Cancel</button>
         <button type="submit" disabled={busy || !value.trim()} className="text-xs font-bold bg-rtc-green text-white rounded-lg px-3 py-1 disabled:opacity-50">Save</button>
       </div>

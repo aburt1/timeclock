@@ -1,38 +1,35 @@
 /**
- * Illustrated campus layout — a hand-placed overhead of North High traced
- * from the 2026/27 room map. Everything is in one 1600 × 1300 coordinate
- * space. Buildings are rounded footprints containing rows of room tiles;
- * sidewalks form a small network the pickup routes walk along.
+ * Illustrated campus layout for North High School, Bakersfield.
  *
- * Nothing here is measured — it's a friendly cartoon, not a survey.
+ * Rooms come from the 2026/27 room map; the arrangement comes from satellite
+ * imagery — athletic fields down the west side, gym and tennis courts north,
+ * the classroom wings stepping through the middle, offices and admin east.
+ * Kept square-on to the screen rather than rotated to true north: this gets
+ * projected for the class, and level labels read far better from the back.
+ *
+ * Nothing here is measured. It is a friendly cartoon, not a survey.
  */
 
-export const MAP_W = 1600;
-export const MAP_H = 1300;
+export const MAP_W = 2150;
+export const MAP_H = 1340;
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Pt = { x: number; y: number };
+export type Segment = { a: Pt; b: Pt };
 
-/** A tile in a row: a room (matches campus.ts room label), or empty space. */
+/** A tile in a row: a room (matching campus.ts), or empty space. */
 export type Tile = { room: string | null; w?: number };
-/** Rows top→bottom. 'corridor' draws a labeled hallway strip. */
+/** Rows top to bottom. 'corridor' is the hallway students walk down. */
 export type Row = Tile[] | 'corridor';
 
 export type BuildingLayout = {
   key: string;
   rect: Rect;
   rows: Row[];
-  /** Roof / wall colours (pastel). */
   color: string;
-  /** Where the sidewalk meets the building — must sit exactly on a sidewalk. */
+  /** Where the path meets the building — must sit on a sidewalk. */
   entrance: Pt;
-  /** Optional flourish. */
-  style?: 'gym' | 'cafeteria' | 'plain';
-  /** Extra detached footprints drawn in the same colour (no tiles). */
   annex?: Array<{ rect: Rect; label?: string; rows?: Row[] }>;
-  /** Optional path drawn from the room out to the entrance (inside the building). */
-  doorPath?: Pt[];
-  /** Draw as "location approximate". */
   approx?: boolean;
 };
 
@@ -40,218 +37,214 @@ const R = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h })
 const t = (room: string | null, w?: number): Tile => (w ? { room, w } : { room });
 
 export const BUILDINGS: BuildingLayout[] = [
-  /* ---------- Group A ---------- */
+  /* ---------- north ---------- */
+  {
+    key: 'gym',
+    color: '#FFD98E',
+    rect: R(830, 100, 250, 150),
+    rows: [[t('Gym', 2.4), t('PE Office', 0.9)]],
+    entrance: { x: 960, y: 310 },
+    annex: [{ rect: R(1110, 130, 92, 92), rows: [[t('J1')]] }],
+  },
+  {
+    key: 'ia-quad',
+    color: '#F9C6D8',
+    rect: R(1280, 90, 300, 210),
+    rows: [
+      [t('IA1'), t('IA7'), t('IA6')],
+      [t('IA2'), t(null), t('IA5')],
+      [t(null), t('IA3'), t('IA4 (ROC)')],
+    ],
+    entrance: { x: 1330, y: 310 },
+  },
+  {
+    key: 'oneill',
+    color: '#B9E4D6',
+    rect: R(1650, 120, 220, 170),
+    rows: [[t('OH4'), t(null, 1.3), t('OH2 (Storage)')], 'corridor', [t(null, 2.3), t('OH3 (Office)')]],
+    entrance: { x: 1610, y: 205 },
+    annex: [
+      { rect: R(1650, 330, 92, 116), rows: [[t('Band Room')]] },
+      { rect: R(1772, 330, 98, 116), rows: [[t('Choir Room')]] },
+    ],
+  },
+  {
+    key: 'trailers',
+    color: '#CDE9A8',
+    rect: R(540, 350, 400, 132),
+    rows: [
+      [t('T14'), t('T13'), t('T12'), t('T11'), t('T10'), t('T9 (SPED Offices)'), t('T8 (SPED Offices)')],
+      'corridor',
+      [t('T7'), t('T6'), t('T5'), t('T4'), t('T3'), t('T2'), t('T1')],
+    ],
+    entrance: { x: 960, y: 416 },
+  },
+  {
+    key: 'cafeteria',
+    color: '#FFB98A',
+    rect: R(1280, 350, 240, 132),
+    rows: [[t('Migrant / Y2L Office')], [t('Cafeteria')], [t('Speech-Language Pathology')]],
+    entrance: { x: 1400, y: 310 },
+  },
+
+  /* ---------- the classroom wings ---------- */
+  {
+    key: 'e-hall',
+    color: '#C6A9E8',
+    rect: R(1020, 540, 420, 165),
+    rows: [
+      [t('E52'), t('E50', 1.5), t('E48'), t('E46', 1.5)],
+      'corridor',
+      [t('E55'), t('E53'), t('E51'), t('E49'), t('E47', 1.3)],
+    ],
+    entrance: { x: 960, y: 622 },
+    annex: [{ rect: R(820, 545, 92, 155), rows: [[t('E58')], [t('E57')], [t('E56')]] }],
+  },
   {
     key: 'd-annex',
     color: '#F6C177',
-    rect: R(136, 710, 334, 250),
+    rect: R(540, 700, 340, 250),
     rows: [
       [t('DA10'), t(null, 4)],
       [t('DA8'), t('DA5'), t('DA3'), t('DA1'), t('History Work Room', 0.9)],
       'corridor',
       [t('DA6'), t('DA4', 1.4), t('DA2', 1.6), t(null, 0.9)],
     ],
-    entrance: { x: 500, y: 869 },
-  },
-  {
-    key: 'c-annex',
-    color: '#F6C177',
-    rect: R(136, 1010, 334, 150),
-    rows: [
-      [t('CA7'), t('CA5'), t('CA3'), t('CA1'), t('SPED Conference Room', 0.9)],
-      'corridor',
-      [t('CA8'), t('CA6'), t('CA4'), t('CA2'), t('English Work Room', 0.9)],
-    ],
-    entrance: { x: 500, y: 1085 },
+    entrance: { x: 960, y: 859 },
   },
   {
     key: 'd-hall',
     color: '#F4A6A0',
-    rect: R(570, 794, 440, 166),
+    rect: R(1020, 790, 420, 165),
     rows: [
       [t('D36'), t('D34'), t('D32'), t('D30'), t('D28'), t('D26'), t(null, 0.6)],
       'corridor',
       [t('D37'), t('D35'), t('D33'), t('D31'), t('D29'), t('D27'), t('Math Work Room', 0.6)],
     ],
-    entrance: { x: 500, y: 877 },
-  },
-  {
-    key: 'c-hall',
-    color: '#F4A6A0',
-    rect: R(530, 1092, 450, 70),
-    rows: [[t('C17'), t('C15'), t('C13'), t('C11'), t('C9'), t('C7')]],
-    entrance: { x: 500, y: 1127 },
-  },
-  {
-    key: 'e-hall',
-    color: '#C6A9E8',
-    rect: R(570, 524, 440, 190),
-    rows: [
-      [t('E52'), t('E50', 1.6), t('E48'), t('E46', 1.6)],
-      'corridor',
-      [t('E55'), t('E53'), t('E51'), t('E49'), t('E47', 1.4)],
-    ],
-    entrance: { x: 500, y: 619 },
-    annex: [
-      {
-        rect: R(356, 524, 74, 170),
-        rows: [[t('E58')], [t('E57')], [t('E56')]],
-      },
-    ],
-  },
-
-  /* ---------- Group B ---------- */
-  {
-    key: 'learning-center',
-    color: '#9AD0F5',
-    rect: R(530, 1010, 214, 74),
-    rows: [[t('Learning Center', 1.1), t('College & Career Center', 0.9)]],
-    entrance: { x: 500, y: 1047 },
-  },
-  {
-    key: 'library',
-    color: '#9AD0F5',
-    rect: R(752, 1010, 228, 74),
-    rows: [[t('Library', 1.2), t('Textbooks & Duplicating', 0.8)]],
-    entrance: { x: 866, y: 985 },
-  },
-  {
-    key: 'admin',
-    color: '#B8D8B0',
-    rect: R(1024, 1010, 380, 130),
-    rows: [
-      [t('Room 6'), t('Room 5 (ASB)'), t('Room 4'), t('Room 3'), t('Room 2'), t('Title I / EL Office', 1.3)],
-      [t('Admin Office')],
-    ],
-    entrance: { x: 1100, y: 985 },
-  },
-  {
-    key: 'a-loft',
-    color: '#9AD0F5',
-    rect: R(320, 1190, 150, 70),
-    rows: [[t('A Loft')]],
-    entrance: { x: 500, y: 1225 },
-    approx: true,
-  },
-  {
-    key: 'gym',
-    color: '#FFD98E',
-    rect: R(250, 160, 226, 120),
-    rows: [[t('Gym', 2.2), t('PE Office', 0.8)]],
-    entrance: { x: 363, y: 316 },
-    style: 'gym',
-    annex: [{ rect: R(706, 184, 78, 92), rows: [[t('J1')]] }],
-  },
-  {
-    key: 'trailers',
-    color: '#CDE9A8',
-    rect: R(136, 344, 334, 146),
-    rows: [
-      [t('T14'), t('T13'), t('T12'), t('T11')],
-      'corridor',
-      [t('T7'), t('T6'), t('T5'), t('T4')],
-    ],
-    entrance: { x: 500, y: 417 },
-    annex: [
-      {
-        rect: R(530, 344, 250, 146),
-        rows: [[t('T10'), t('T9 (SPED Offices)'), t('T8 (SPED Offices)')], 'corridor', [t('T3'), t('T2'), t('T1')]],
-      },
-    ],
-  },
-  {
-    key: 'ia-quad',
-    color: '#F9C6D8',
-    rect: R(890, 76, 310, 222),
-    rows: [
-      [t('IA1'), t('IA7'), t('IA6')],
-      [t('IA2'), t(null), t('IA5')],
-      [t(null), t('IA3'), t('IA4 (ROC)')],
-    ],
-    entrance: { x: 1045, y: 316 },
-  },
-  {
-    key: 'cafeteria',
-    color: '#FFB98A',
-    rect: R(980, 336, 220, 134),
-    rows: [
-      [t('Migrant / Y2L Office', 1.2), t(null, 0.8)],
-      [t('Cafeteria')],
-      [t('Speech-Language Pathology')],
-    ],
-    entrance: { x: 1090, y: 316 },
-    style: 'cafeteria',
-  },
-  {
-    key: 'oneill',
-    color: '#B9E4D6',
-    rect: R(1280, 136, 204, 174),
-    rows: [[t('OH4'), t(null, 1.4), t('OH2 (Storage)')], 'corridor', [t(null, 2.4), t('OH3 (Office)')]],
-    entrance: { x: 1240, y: 223 },
-    annex: [
-      { rect: R(1280, 360, 74, 120), rows: [[t('Band Room')]] },
-      { rect: R(1400, 400, 84, 90), rows: [[t('Choir Room')]] },
-    ],
+    entrance: { x: 960, y: 872 },
   },
   {
     key: 'b-hall',
     color: '#B9E4D6',
-    rect: R(1280, 550, 204, 410),
+    rect: R(1650, 560, 210, 390),
     rows: [
-      [t('B68 (ISP)'), t(null, 0.5), t('B69')],
-      [t('B70'), t(null, 0.5), t('B71')],
-      [t('B72'), t(null, 0.5), t('B73 (OCI)')],
-      [t('B74'), t(null, 0.5), t('B75 (PAC/PLUS)')],
-      [t("Dean's Office"), t(null, 0.5), t('SAS Office')],
+      [t('B68 (ISP)'), t(null, 0.4), t('B69')],
+      [t('B70'), t(null, 0.4), t('B71')],
+      [t('B72'), t(null, 0.4), t('B73 (OCI)')],
+      [t('B74'), t(null, 0.4), t('B75 (PAC/PLUS)')],
+      [t("Dean's Office"), t(null, 0.4), t('SAS Office')],
     ],
-    entrance: { x: 1240, y: 700 },
+    entrance: { x: 1610, y: 755 },
+  },
+
+  /* ---------- south ---------- */
+  {
+    key: 'learning-center',
+    color: '#9AD0F5',
+    rect: R(1040, 980, 200, 72),
+    rows: [[t('Learning Center'), t('College & Career Center')]],
+    entrance: { x: 960, y: 1016 },
+  },
+  {
+    key: 'library',
+    color: '#9AD0F5',
+    rect: R(1270, 980, 220, 72),
+    rows: [[t('Library'), t('Textbooks & Duplicating')]],
+    entrance: { x: 1380, y: 970 },
+  },
+  {
+    key: 'c-annex',
+    color: '#F6C177',
+    rect: R(560, 1010, 340, 150),
+    rows: [
+      [t('CA7'), t('CA5'), t('CA3'), t('CA1'), t('SPED Conference Room', 0.9)],
+      'corridor',
+      [t('CA8'), t('CA6'), t('CA4'), t('CA2'), t('English Work Room', 0.9)],
+    ],
+    entrance: { x: 960, y: 1085 },
+  },
+  {
+    key: 'c-hall',
+    color: '#F4A6A0',
+    rect: R(1040, 1082, 440, 78),
+    rows: [[t('C17'), t('C15'), t('C13'), t('C11'), t('C9'), t('C7')]],
+    entrance: { x: 960, y: 1121 },
+  },
+  {
+    key: 'admin',
+    color: '#B8D8B0',
+    rect: R(1650, 1000, 300, 132),
+    rows: [
+      [t('Room 6'), t('Room 5 (ASB)'), t('Room 4'), t('Room 3'), t('Room 2')],
+      [t('Admin Office', 3), t('Title I / EL Office', 2)],
+    ],
+    entrance: { x: 1610, y: 1066 },
+  },
+  {
+    key: 'a-loft',
+    color: '#9AD0F5',
+    rect: R(1020, 1200, 190, 74),
+    rows: [[t('A Loft')]],
+    entrance: { x: 960, y: 1237 },
+    approx: true,
   },
 ];
 
-/** Home classroom DA4 and where its door meets the sidewalk. */
+/** Home classroom DA4 — every walk starts and ends here. */
 export const HOME = {
   building: 'd-annex',
   room: 'DA4',
-  /** Sidewalk point where the D Annex hallway meets the path. */
-  door: { x: 500, y: 869 },
-  /** From inside DA4 out to the door (drawn as part of every route). */
-  path: [{ x: 262, y: 905 }, { x: 262, y: 869 }, { x: 500, y: 869 }] as Pt[],
+  /** Where the D Annex hallway meets the sidewalk. */
+  door: { x: 960, y: 859 } as Pt,
+  /** Out of DA4, into the hall, and out to the path. */
+  path: [{ x: 661, y: 908 }, { x: 661, y: 859 }, { x: 960, y: 859 }] as Pt[],
 };
 
-/* ---------- Sidewalk network ---------- */
-
-export type Segment = { a: Pt; b: Pt };
+/* ---------- sidewalks ---------- */
 
 export const SIDEWALKS: Segment[] = [
-  // horizontal
-  { a: { x: 136, y: 316 }, b: { x: 1560, y: 316 } },
-  { a: { x: 500, y: 752 }, b: { x: 1560, y: 752 } },
-  { a: { x: 500, y: 985 }, b: { x: 1560, y: 985 } },
-  // vertical
-  { a: { x: 500, y: 316 }, b: { x: 500, y: 1240 } },
-  { a: { x: 1240, y: 60 }, b: { x: 1240, y: 985 } },
+  { a: { x: 960, y: 250 }, b: { x: 960, y: 1270 } },   // main spine
+  { a: { x: 1610, y: 180 }, b: { x: 1610, y: 1120 } }, // east spine
+  { a: { x: 540, y: 310 }, b: { x: 1610, y: 310 } },
+  { a: { x: 960, y: 500 }, b: { x: 1900, y: 500 } },
+  { a: { x: 960, y: 740 }, b: { x: 1610, y: 740 } },
+  { a: { x: 540, y: 970 }, b: { x: 1900, y: 970 } },
+  { a: { x: 960, y: 1190 }, b: { x: 1610, y: 1190 } },
 ];
 
-/* ---------- Decor ---------- */
+/* ---------- landmarks (scenery only) ---------- */
 
-export const QUAD: Rect = R(1080, 510, 140, 440);
+export type Landmark = {
+  kind: 'track' | 'diamond' | 'tennis' | 'pool' | 'parking' | 'amphitheatre' | 'quad';
+  rect: Rect;
+  label: string;
+};
+
+export const LANDMARKS: Landmark[] = [
+  { kind: 'track', rect: R(40, 70, 350, 240), label: 'Athletic Field' },
+  { kind: 'diamond', rect: R(40, 360, 350, 250), label: 'Baseball' },
+  { kind: 'diamond', rect: R(40, 660, 350, 240), label: 'Softball' },
+  { kind: 'pool', rect: R(60, 950, 310, 120), label: 'Pool' },
+  { kind: 'tennis', rect: R(1900, 60, 230, 160), label: 'Tennis' },
+  { kind: 'parking', rect: R(1900, 300, 220, 200), label: 'Parking' },
+  { kind: 'amphitheatre', rect: R(1900, 590, 220, 180), label: 'Amphitheatre' },
+  { kind: 'parking', rect: R(1300, 1215, 420, 100), label: 'Parking' },
+  { kind: 'quad', rect: R(1480, 540, 110, 410), label: 'Quad' },
+];
+
+export const QUAD: Rect = R(1480, 540, 110, 410);
+export const FOUNTAIN: Pt = { x: 1535, y: 745 };
 
 export const TREES: Array<Pt & { r?: number }> = [
-  // Quad
-  { x: 1110, y: 560, r: 26 }, { x: 1200, y: 600, r: 22 }, { x: 1120, y: 880, r: 24 },
-  { x: 1205, y: 920, r: 20 }, { x: 1150, y: 640, r: 18 },
-  // around campus
-  { x: 180, y: 560, r: 26 }, { x: 250, y: 620, r: 20 }, { x: 300, y: 560, r: 22 },
-  { x: 800, y: 60, r: 22 }, { x: 860, y: 40, r: 18 },
-  { x: 1520, y: 80, r: 24 }, { x: 1530, y: 560, r: 22 }, { x: 1520, y: 1080, r: 26 },
-  { x: 60, y: 200, r: 24 }, { x: 60, y: 900, r: 22 }, { x: 60, y: 1250, r: 20 },
-  { x: 900, y: 1240, r: 22 }, { x: 1300, y: 1240, r: 24 }, { x: 600, y: 1240, r: 20 },
-  { x: 1400, y: 40, r: 18 }, { x: 250, y: 60, r: 26 }, { x: 560, y: 70, r: 20 },
-  { x: 90, y: 600, r: 22 }, { x: 90, y: 1060, r: 20 }, 
-  { x: 700, y: 1220, r: 24 }, { x: 1120, y: 1220, r: 20 }, 
+  { x: 1510, y: 590, r: 24 }, { x: 1560, y: 650, r: 19 }, { x: 1515, y: 890, r: 22 },
+  { x: 1555, y: 830, r: 17 },
+  { x: 470, y: 1180, r: 24 }, { x: 700, y: 620, r: 26 }, { x: 480, y: 560, r: 20 },
+  { x: 1160, y: 320, r: 20 }, { x: 1230, y: 250, r: 24 }, { x: 700, y: 250, r: 22 },
+  { x: 2000, y: 850, r: 26 }, { x: 2050, y: 1080, r: 22 },
+  { x: 780, y: 1240, r: 22 }, { x: 1260, y: 1130, r: 20 }, { x: 1540, y: 1130, r: 22 },
+  { x: 920, y: 60, r: 20 }, { x: 1960, y: 1180, r: 24 }, { x: 660, y: 1000, r: 0 },
+  { x: 2060, y: 560, r: 20 }, { x: 1750, y: 1180, r: 22 }, { x: 430, y: 1290, r: 24 },
 ];
-
-export const FOUNTAIN: Pt = { x: 1155, y: 760 };
 
 /* ---------- Geometry helpers ---------- */
 
@@ -484,4 +477,95 @@ export function perimeterLoop(rect: Rect, from: Pt, pad = 22): Pt[] {
   });
   const ordered = [...corners.slice(start), ...corners.slice(0, start)];
   return [...ordered, ordered[0]];
+}
+
+/* ---------- walking inside a building ---------- */
+
+export type Part = { rect: Rect; rows: Row[] };
+
+/** Every footprint of a building that has rooms in it. */
+export function buildingParts(b: BuildingLayout): Part[] {
+  return [
+    { rect: b.rect, rows: b.rows },
+    ...(b.annex ?? []).filter((a) => a.rows).map((a) => ({ rect: a.rect, rows: a.rows! })),
+  ];
+}
+
+/** The hallway line students actually walk down inside a part. */
+export function partSpine(part: Part, entrance: Pt): Segment {
+  const corridor = layoutTiles(part.rect, part.rows).find((t) => 'corridor' in t) as
+    | { corridor: true; rect: Rect }
+    | undefined;
+  if (corridor) {
+    const c = corridor.rect;
+    return { a: { x: c.x + 8, y: c.y + c.h / 2 }, b: { x: c.x + c.w - 8, y: c.y + c.h / 2 } };
+  }
+  // No interior hallway: walk along the outside edge facing the entrance.
+  const r = part.rect;
+  const pad = 30;
+  const d = {
+    top: Math.abs(entrance.y - r.y),
+    bottom: Math.abs(entrance.y - (r.y + r.h)),
+    left: Math.abs(entrance.x - r.x),
+    right: Math.abs(entrance.x - (r.x + r.w)),
+  };
+  const nearest = (Object.keys(d) as Array<keyof typeof d>).reduce((a, b) => (d[a] <= d[b] ? a : b));
+  if (nearest === 'top') return { a: { x: r.x + 14, y: r.y - pad }, b: { x: r.x + r.w - 14, y: r.y - pad } };
+  if (nearest === 'bottom') return { a: { x: r.x + 14, y: r.y + r.h + pad }, b: { x: r.x + r.w - 14, y: r.y + r.h + pad } };
+  if (nearest === 'left') return { a: { x: r.x - pad, y: r.y + 14 }, b: { x: r.x - pad, y: r.y + r.h - 14 } };
+  return { a: { x: r.x + r.w + pad, y: r.y + 14 }, b: { x: r.x + r.w + pad, y: r.y + r.h - 14 } };
+}
+
+export function isHorizontal(s: Segment): boolean {
+  return Math.abs(s.a.y - s.b.y) < 0.5;
+}
+
+/** Closest point on an axis-aligned segment. */
+export function projectOnSegment(p: Pt, s: Segment): Pt {
+  const clamp = (v: number, a: number, b: number) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
+  return isHorizontal(s)
+    ? { x: clamp(p.x, s.a.x, s.b.x), y: s.a.y }
+    : { x: s.a.x, y: clamp(p.y, s.a.y, s.b.y) };
+}
+
+/** A room's doorway (on the wall facing the hall) and the hall point outside it. */
+export function roomDoor(room: Rect, spine: Segment): { door: Pt; hall: Pt } {
+  const c = center(room);
+  const hall = projectOnSegment(c, spine);
+  const door = isHorizontal(spine)
+    ? { x: hall.x, y: hall.y > c.y ? room.y + room.h - 8 : room.y + 8 }
+    : { y: hall.y, x: hall.x > c.x ? room.x + room.w - 8 : room.x + 8 };
+  return { door, hall };
+}
+
+/** Which end of the hallway you come in through. */
+export function spineEntry(spine: Segment, from: Pt): Pt {
+  return Math.hypot(spine.a.x - from.x, spine.a.y - from.y) <=
+    Math.hypot(spine.b.x - from.x, spine.b.y - from.y)
+    ? spine.a
+    : spine.b;
+}
+
+/** Running distance to each point of a polyline. */
+export function cumulative(pts: Pt[]): number[] {
+  const out = [0];
+  for (let i = 1; i < pts.length; i++) {
+    out.push(out[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  }
+  return out;
+}
+
+/** Point at a given distance along a polyline. */
+export function pointAtDistance(pts: Pt[], dist: number): Pt {
+  const cum = cumulative(pts);
+  const total = cum[cum.length - 1];
+  const d = Math.min(Math.max(dist, 0), total);
+  for (let i = 1; i < pts.length; i++) {
+    if (d <= cum[i]) {
+      const seg = cum[i] - cum[i - 1];
+      const u = seg === 0 ? 0 : (d - cum[i - 1]) / seg;
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * u, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * u };
+    }
+  }
+  return pts[pts.length - 1];
 }

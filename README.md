@@ -51,13 +51,22 @@ audit trails, this is the wrong tool on purpose.
 - **Admin** (`/admin`) — timesheet with per-student totals, inline time
   editing, flags for anything odd ("● still in", "⚠ missing" a punch), a
   Reports tab (hours by student, hours by day, date-range presets), roster
-  management, and a **Pickup Routes** tab: an illustrated, cartoon-style
-  campus map (drawn in SVG, no map provider) showing each day's Group A /
-  Group B buildings, walking routes along the sidewalks from the home
-  classroom, every signed-up person at their room, the Monday–Friday
-  schedule, and a table where any sign-up's day or group can be overridden
-  or removed. Double-click any building or room on the map to rename it —
-  the new name shows up everywhere. One-click CSV export everywhere.
+  management, and a **Pickup Routes** tab — both a teacher dashboard and a
+  teaching aid for the classroom board:
+  - An illustrated campus map (hand-drawn SVG, no map provider) laid out to
+    match the real school: athletic fields west, gym and tennis courts north,
+    the classroom wings through the middle, offices and admin east.
+  - Pick a day and a group, and the map draws that walk **door to door** —
+    out of DA4, along the sidewalks, down each hallway, and into every
+    classroom with a bin, with the stops numbered in walking order.
+  - A **slider** walks the route step by step (with a Play button) so the
+    class can follow where they go and who they'll see. Nothing animates on
+    its own — the teacher drives it.
+  - Everything not on today's walk is dimmed, so the board stays readable
+    from the back of the room.
+  - The Monday–Friday schedule and a table where any sign-up's day or group
+    can be overridden or removed. Double-click any building or room on the
+    map to rename it — the new name shows up everywhere. CSV export too.
 - **Storage** — a single SQLite file at `/data/timeclock.db`. Back it up by
   copying one file, or use **Export all** in the admin page.
 
@@ -78,8 +87,8 @@ and to exactly one weekday, matching the 6th-period collection routine:
 Assignments are estimates from the campus map, not measured distances — the
 admin can override any individual sign-up's day or group, and that override
 always wins. Buildings, rooms, and this table live in one file,
-`server/src/campus.ts`; the illustrated map's footprints, room tiles, and
-sidewalk network are in `web/src/lib/campusLayout.ts`. Room labels are codes
+`server/src/campus.ts`; the illustrated map's footprints, room tiles, hallway
+spines, and sidewalk network are in `web/src/lib/campusLayout.ts`. Room labels are codes
 only, never staff names, so nothing goes stale when people move.
 
 A fresh install seeds nine example students (Alex, Bailey, Casey, …) so the
