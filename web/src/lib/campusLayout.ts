@@ -461,3 +461,27 @@ export function offsetRight(pts: Pt[], d: number): Pt[] {
   out.push(segs[segs.length - 1].b);
   return out;
 }
+
+/**
+ * A walking loop around a building's footprint, starting and ending at the
+ * point nearest `from`. Used when a group collects the building it already
+ * lives in — otherwise that route would be a zero-length stub.
+ */
+export function perimeterLoop(rect: Rect, from: Pt, pad = 22): Pt[] {
+  const x1 = rect.x - pad, y1 = rect.y - pad;
+  const x2 = rect.x + rect.w + pad, y2 = rect.y + rect.h + pad;
+  const corners: Pt[] = [
+    { x: x1, y: y1 },
+    { x: x2, y: y1 },
+    { x: x2, y: y2 },
+    { x: x1, y: y2 },
+  ];
+  // start at the corner closest to the walker's entry point
+  let start = 0, best = Infinity;
+  corners.forEach((c, i) => {
+    const d = Math.hypot(c.x - from.x, c.y - from.y);
+    if (d < best) { best = d; start = i; }
+  });
+  const ordered = [...corners.slice(start), ...corners.slice(0, start)];
+  return [...ordered, ordered[0]];
+}

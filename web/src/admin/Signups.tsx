@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, bLabel, type Campus, type Day, type Group, type Signup } from '../lib/api';
 import { CartoonMap } from './CartoonMap';
 
-const GROUP_TEXT: Record<Group, string> = { A: 'text-rtc-green-dark', B: 'text-blue-700' };
-const GROUP_BG: Record<Group, string> = { A: 'bg-green-50 border-green-200', B: 'bg-blue-50 border-blue-200' };
+// Group A is crimson (a green route is invisible on the map's grass).
+const GROUP_TEXT: Record<Group, string> = { A: 'text-rose-700', B: 'text-blue-700' };
+const GROUP_BG: Record<Group, string> = { A: 'bg-rose-50 border-rose-200', B: 'bg-blue-50 border-blue-200' };
 
 function todayView(days: Day[]): Day | 'week' {
   const d = new Date().getDay(); // 0 Sun … 6 Sat

@@ -12,6 +12,7 @@ import {
   center,
   layoutTiles,
   offsetRight,
+  perimeterLoop,
   pointAlong,
   roomRect,
   routeAlongSidewalks,
@@ -20,7 +21,8 @@ import {
   type Rect,
 } from '../lib/campusLayout';
 
-const GROUP_COLOR: Record<Group, string> = { A: '#2E7D32', B: '#1976D2' };
+// Group A is crimson, not green: a green route disappears against the grass.
+const GROUP_COLOR: Record<Group, string> = { A: '#C2255C', B: '#1976D2' };
 const GROUP_LABEL: Record<Group, string> = { A: 'Group A · slow walkers', B: 'Group B · standard route' };
 
 type View = Day | 'week';
@@ -108,10 +110,24 @@ export function CartoonMap({
 
   const routes = useMemo(() => {
     if (view === 'week') return [];
-    const out: Array<{ group: Group; pts: Pt[] }> = [];
+    const out: Array<{ group: Group; pts: Pt[]; lap?: boolean }> = [];
     for (const g of ['A', 'B'] as Group[]) {
-      const stops = campus.buildings.filter((b) => b.day === view && b.group === g).map((b) => layoutByKey.get(b.key)?.entrance).filter((p): p is Pt => !!p);
+      const todays = campus.buildings.filter((b) => b.day === view && b.group === g);
+      const stops = todays.map((b) => layoutByKey.get(b.key)?.entrance).filter((p): p is Pt => !!p);
       if (!stops.length) continue;
+
+      // Collecting the building we already live in: walk a lap around it,
+      // otherwise the route is a stub hidden under the classrooms.
+      if (todays.length === 1 && todays[0].key === HOME.building) {
+        const home = layoutByKey.get(HOME.building);
+        if (home) {
+          const room = roomRect(home, HOME.room);
+          const start = room ? center(room) : HOME.path[0];
+          out.push({ group: g, pts: perimeterLoop(home.rect, start), lap: true });
+          continue;
+        }
+      }
+
       let pts: Pt[] = [...HOME.path];
       let cur = HOME.door;
       for (const s of [...stops, HOME.door]) {
@@ -366,7 +382,7 @@ export function CartoonMap({
           {/* Routes */}
           {routes.map((r) => {
             const d = r.pts.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
-            const walker = pointAlong(r.pts, r.group === 'A' ? 0.3 : 0.25);
+            const walker = pointAlong(r.pts, r.lap ? 0.62 : r.group === 'A' ? 0.3 : 0.25);
             return (
               <g key={r.group} pointerEvents="none">
                 <path d={d} fill="none" stroke="white" strokeWidth={11} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
