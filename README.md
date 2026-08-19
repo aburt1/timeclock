@@ -53,11 +53,13 @@ audit trails, this is the wrong tool on purpose.
   Reports tab (hours by student, hours by day, date-range presets), roster
   management, and a **Pickup Routes** tab — both a teacher dashboard and a
   teaching aid for the classroom board:
-  - A campus map drawn **on top of an aerial photo of the school**, with
-    every building placed at its real footprint and its rooms laid out inside,
-    so students recognise where they are. (Imagery © Esri, Maxar, Earthstar
-    Geographics — a single static image shipped with the app; no live tiles,
-    no API keys.)
+  - A campus map **traced from an aerial photo of the school**: every
+    building's real outline (the tilted B Hall, the cafeteria's cut corner,
+    Admin's rotunda, the barrel-roofed small gym), the real diagonal
+    walkways, and the room-map schematic fitted inside each building so rooms
+    are still easy to find. Scroll to zoom, drag to pan. (Imagery © Esri,
+    Maxar, Earthstar Geographics — one static image shipped with the app; no
+    live tiles, no API keys.)
   - Pick a day and a group, and the map draws that walk **door to door** —
     out of DA4, along the sidewalks, down each hallway, and into every
     classroom with a bin, with the stops numbered in walking order.
@@ -89,9 +91,9 @@ to exactly one weekday, matching the 6th-period collection routine:
 Assignments are estimates from the campus map, not measured distances — the
 admin can override any individual sign-up's day or group, and that override
 always wins. Buildings, rooms, and this table live in one file,
-`server/src/campus.ts`; the map's building footprints, room tiles, hallway
-spines, and sidewalk network are in `web/src/lib/campusLayout.ts`, in the
-pixel space of `web/public/campus-aerial.jpg`. Room labels are codes
+`server/src/campus.ts`; the map's traced building outlines, room frames,
+hallway spines, and sidewalk network are in `web/src/lib/campusLayout.ts`, in
+the pixel space of `web/public/campus-aerial.jpg`. Room labels are codes
 only, never staff names, so nothing goes stale when people move.
 
 A fresh install seeds nine example students (Alex, Bailey, Casey, …) so the
