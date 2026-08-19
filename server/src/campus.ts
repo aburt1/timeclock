@@ -82,21 +82,22 @@ export const BUILDINGS: Building[] = [
   },
   {
     key: 'admin',
-    name: 'Admin',
+    name: 'Admin Office',
     group: 'B',
     day: 'Monday',
-    rooms: [
-      'Admin Office',
-      'Room 2', 'Room 3', 'Room 4', 'Room 5 (ASB)', 'Room 6 (ASB)',
-      'Title I / EL Office',
-    ],
+    rooms: ['Admin Office'],
   },
   {
+    // The loft is the upstairs of the Admin building — a row of classrooms
+    // along the quad side, above the Admin Office.
     key: 'a-loft',
     name: 'A Loft',
     group: 'B',
     day: 'Tuesday',
-    rooms: ['A Loft'],
+    rooms: [
+      'Room 6 (ASB)', 'Room 5 (ASB)', 'Room 4', 'Room 3', 'Room 2',
+      'Room 1 (Title I / EL)',
+    ],
   },
   {
     key: 'library',

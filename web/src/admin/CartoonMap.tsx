@@ -116,7 +116,7 @@ export function CartoonMap({
         const tiles = layoutTiles(part.rect, part.rows).filter((t) => 'room' in t) as Array<{ room: string; rect: Rect }>;
         const here = mine.filter((s) => !s.isCustom && tiles.some((t) => t.room === s.room));
         if (!here.length) continue;
-        const spine = partSpine(part, l.entrance);
+        const spine = partSpine(part, l.entrance, l.walkway);
         const entry = spineEntry(spine, cur);
         pts.push(entry);
         const doors = here
@@ -278,7 +278,7 @@ export function CartoonMap({
                 onDoubleClick={(e) => { e.stopPropagation(); setRename({ key: `b:${l.key}`, title: 'Rename building', base: info?.name ?? l.key, current: name, at: { x: l.rect.x + l.rect.w / 2, y: l.rect.y } }); }}>
                 {parts.map(({ rect, rows }, pi) => (
                   <g key={pi}>
-                    <rect x={rect.x + 5} y={rect.y + 8} width={rect.w} height={rect.h} rx={18} fill="#000" opacity={0.12} />
+                    <rect x={rect.x + (l.upstairs ? 9 : 5)} y={rect.y + (l.upstairs ? 16 : 8)} width={rect.w} height={rect.h} rx={18} fill="#000" opacity={l.upstairs ? 0.2 : 0.12} />
                     <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx={18} fill={lit ? l.color : QUIET_FILL} />
                     {lit && <rect x={rect.x - 5} y={rect.y - 5} width={rect.w + 10} height={rect.h + 10} rx={23} fill="none" stroke={gcolor} strokeWidth={7} />}
                     {lit && rows && layoutTiles(rect, rows).map((tile, ti) => {
@@ -305,6 +305,14 @@ export function CartoonMap({
                     })}
                   </g>
                 ))}
+
+                {/* Upstairs marker */}
+                {l.upstairs && (
+                  <g pointerEvents="none">
+                    <rect x={l.rect.x - 4} y={l.rect.y + l.rect.h - 4} width={70} height={30} rx={15} fill="#FFFFFF" stroke={gcolor} strokeWidth={4} />
+                    <text x={l.rect.x + 31} y={l.rect.y + l.rect.h + 18} textAnchor="middle" fontSize={17} fontWeight={900} fill={gcolor}>▲ up</text>
+                  </g>
+                )}
 
                 {/* Name plate */}
                 {(() => {

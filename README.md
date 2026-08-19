@@ -78,8 +78,8 @@ and to exactly one weekday, matching the 6th-period collection routine:
 
 | Day | Group A — slow walkers | Group B — standard route |
 |---|---|---|
-| Monday | D Annex | Learning Center / College & Career Center, Admin |
-| Tuesday | C Annex | A Loft, Library / Textbook |
+| Monday | D Annex | Learning Center / College & Career Center, Admin Office |
+| Tuesday | C Annex | A Loft (Admin upstairs), Library / Textbook |
 | Wednesday | D Hall | Gym / T-Building (Trailers) |
 | Thursday | C Hall | IA Quad, Cafeteria / SLP / Migrant Office |
 | Friday | E Hall | O'Neill Hall & B Hall Offices |

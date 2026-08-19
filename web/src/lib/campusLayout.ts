@@ -31,6 +31,10 @@ export type BuildingLayout = {
   entrance: Pt;
   annex?: Array<{ rect: Rect; label?: string; rows?: Row[] }>;
   approx?: boolean;
+  /** Force which side the walkway runs along (rooms in one row need this). */
+  walkway?: 'top' | 'bottom' | 'left' | 'right';
+  /** Drawn as an upper floor sitting on the building below it. */
+  upstairs?: boolean;
 };
 
 const R = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h });
@@ -126,7 +130,7 @@ export const BUILDINGS: BuildingLayout[] = [
   {
     key: 'b-hall',
     color: '#B9E4D6',
-    rect: R(1650, 560, 210, 390),
+    rect: R(1650, 540, 210, 360),
     rows: [
       [t('B68 (ISP)'), t(null, 0.4), t('B69')],
       [t('B70'), t(null, 0.4), t('B71')],
@@ -134,7 +138,7 @@ export const BUILDINGS: BuildingLayout[] = [
       [t('B74'), t(null, 0.4), t('B75 (PAC/PLUS)')],
       [t("Dean's Office"), t(null, 0.4), t('SAS Office')],
     ],
-    entrance: { x: 1610, y: 755 },
+    entrance: { x: 1610, y: 720 },
   },
 
   /* ---------- south ---------- */
@@ -173,20 +177,20 @@ export const BUILDINGS: BuildingLayout[] = [
   {
     key: 'admin',
     color: '#B8D8B0',
-    rect: R(1650, 1000, 300, 132),
-    rows: [
-      [t('Room 6'), t('Room 5 (ASB)'), t('Room 4'), t('Room 3'), t('Room 2')],
-      [t('Admin Office', 3), t('Title I / EL Office', 2)],
-    ],
-    entrance: { x: 1610, y: 1066 },
+    rect: R(1650, 1092, 400, 108),
+    rows: [[t('Admin Office')]],
+    entrance: { x: 1610, y: 1146 },
+    walkway: 'left',
   },
   {
+    // Upstairs of the Admin building: a row of classrooms facing the quad.
     key: 'a-loft',
     color: '#9AD0F5',
-    rect: R(1020, 1200, 190, 74),
-    rows: [[t('A Loft')]],
-    entrance: { x: 960, y: 1237 },
-    approx: true,
+    rect: R(1650, 960, 400, 112),
+    rows: [[t('Room 6 (ASB)'), t('Room 5 (ASB)'), t('Room 4'), t('Room 3'), t('Room 2'), t('Room 1 (Title I / EL)', 1.4)]],
+    entrance: { x: 1610, y: 1016 },
+    walkway: 'top',
+    upstairs: true,
   },
 ];
 
@@ -204,12 +208,13 @@ export const HOME = {
 
 export const SIDEWALKS: Segment[] = [
   { a: { x: 960, y: 250 }, b: { x: 960, y: 1270 } },   // main spine
-  { a: { x: 1610, y: 180 }, b: { x: 1610, y: 1120 } }, // east spine
+  { a: { x: 1610, y: 180 }, b: { x: 1610, y: 1230 } }, // east spine
   { a: { x: 540, y: 310 }, b: { x: 1610, y: 310 } },
-  { a: { x: 960, y: 500 }, b: { x: 1900, y: 500 } },
+  { a: { x: 960, y: 500 }, b: { x: 1610, y: 500 } },
   { a: { x: 960, y: 740 }, b: { x: 1610, y: 740 } },
-  { a: { x: 540, y: 970 }, b: { x: 1900, y: 970 } },
+  { a: { x: 540, y: 970 }, b: { x: 1610, y: 970 } },
   { a: { x: 960, y: 1190 }, b: { x: 1610, y: 1190 } },
+  { a: { x: 1610, y: 500 }, b: { x: 1900, y: 500 } },
 ];
 
 /* ---------- landmarks (scenery only) ---------- */
@@ -240,10 +245,10 @@ export const TREES: Array<Pt & { r?: number }> = [
   { x: 1555, y: 830, r: 17 },
   { x: 470, y: 1180, r: 24 }, { x: 700, y: 620, r: 26 }, { x: 480, y: 560, r: 20 },
   { x: 1160, y: 320, r: 20 }, { x: 1230, y: 250, r: 24 }, { x: 700, y: 250, r: 22 },
-  { x: 2000, y: 850, r: 26 }, { x: 2050, y: 1080, r: 22 },
-  { x: 780, y: 1240, r: 22 }, { x: 1260, y: 1130, r: 20 }, { x: 1540, y: 1130, r: 22 },
-  { x: 920, y: 60, r: 20 }, { x: 1960, y: 1180, r: 24 }, { x: 660, y: 1000, r: 0 },
-  { x: 2060, y: 560, r: 20 }, { x: 1750, y: 1180, r: 22 }, { x: 430, y: 1290, r: 24 },
+  { x: 2000, y: 850, r: 26 }, { x: 2100, y: 890, r: 22 },
+  { x: 780, y: 1240, r: 22 }, { x: 1260, y: 1130, r: 20 }, { x: 1560, y: 1240, r: 22 },
+  { x: 920, y: 60, r: 20 }, { x: 1360, y: 1130, r: 24 }, { x: 660, y: 1000, r: 0 },
+  { x: 2060, y: 560, r: 20 }, { x: 1180, y: 1240, r: 22 }, { x: 430, y: 1290, r: 24 },
 ];
 
 /* ---------- Geometry helpers ---------- */
@@ -492,7 +497,7 @@ export function buildingParts(b: BuildingLayout): Part[] {
 }
 
 /** The hallway line students actually walk down inside a part. */
-export function partSpine(part: Part, entrance: Pt): Segment {
+export function partSpine(part: Part, entrance: Pt, walkway?: 'top' | 'bottom' | 'left' | 'right'): Segment {
   const corridor = layoutTiles(part.rect, part.rows).find((t) => 'corridor' in t) as
     | { corridor: true; rect: Rect }
     | undefined;
@@ -509,7 +514,7 @@ export function partSpine(part: Part, entrance: Pt): Segment {
     left: Math.abs(entrance.x - r.x),
     right: Math.abs(entrance.x - (r.x + r.w)),
   };
-  const nearest = (Object.keys(d) as Array<keyof typeof d>).reduce((a, b) => (d[a] <= d[b] ? a : b));
+  const nearest = walkway ?? (Object.keys(d) as Array<keyof typeof d>).reduce((a, b) => (d[a] <= d[b] ? a : b));
   if (nearest === 'top') return { a: { x: r.x + 14, y: r.y - pad }, b: { x: r.x + r.w - 14, y: r.y - pad } };
   if (nearest === 'bottom') return { a: { x: r.x + 14, y: r.y + r.h + pad }, b: { x: r.x + r.w - 14, y: r.y + r.h + pad } };
   if (nearest === 'left') return { a: { x: r.x - pad, y: r.y + 14 }, b: { x: r.x - pad, y: r.y + r.h - 14 } };
