@@ -43,12 +43,42 @@ audit trails, this is the wrong tool on purpose.
   yourself, then giant CLOCK IN / CLOCK OUT buttons with a friendly
   confirmation. Students can have their shape and color changed (or change
   their minds) freely on the admin roster page.
+- **Staff sign-up** (`/signup`) — the "Recycling With The Stars" request form
+  for teachers and staff who want a recycling bin: name, classroom/office,
+  room picked from a dropdown grouped by building (with an "Other" escape
+  hatch and a "where in the Admin Office?" follow-up). No login. Sign-ups
+  are automatically placed on a two-group weekly pickup schedule.
 - **Admin** (`/admin`) — timesheet with per-student totals, inline time
   editing, flags for anything odd ("● still in", "⚠ missing" a punch), a
   Reports tab (hours by student, hours by day, date-range presets), roster
-  management, and one-click CSV export.
+  management, and a **Pickup Routes** tab: an interactive campus map showing
+  each day's Group A / Group B buildings and walking routes from the home
+  classroom, the Monday–Friday schedule with every signed-up room, and a
+  table where any sign-up's day or group can be overridden or removed.
+  One-click CSV export everywhere.
 - **Storage** — a single SQLite file at `/data/timeclock.db`. Back it up by
   copying one file, or use **Export all** in the admin page.
+
+### Pickup schedule rules
+
+Every building on campus is assigned to **Group A** (slow walkers — the five
+buildings closest to the home classroom, DA4) or **Group B** (standard route),
+and to exactly one weekday, matching the 6th-period collection routine:
+
+| Day | Group A — slow walkers | Group B — standard route |
+|---|---|---|
+| Monday | D Annex | Learning Center / College & Career Center, Admin |
+| Tuesday | C Annex | A Loft, Library / Textbook |
+| Wednesday | D Hall | Gym / T-Building (Trailers) |
+| Thursday | C Hall | IA Quad, Cafeteria / SLP / Migrant Office |
+| Friday | E Hall | O'Neill Hall & B Hall Offices |
+
+Assignments are estimates from the campus map, not measured distances — the
+admin can override any individual sign-up's day or group, and that override
+always wins. Buildings, rooms, and this table live in one file,
+`server/src/campus.ts`; the map overlay coordinates are in
+`web/src/lib/campusMap.ts`. Room labels are codes only, never staff names,
+so nothing goes stale when people move.
 
 A fresh install seeds nine example students (Alex, Bailey, Casey, …) so the
 kiosk works immediately — rename them to your own roster on the admin page.
@@ -107,6 +137,11 @@ GET  /api/admin/sessions?from&to&studentId
 POST/PATCH/DELETE /api/admin/sessions[/:id]
 GET/POST/PATCH/DELETE /api/admin/students[/:id]
 GET  /api/admin/export.csv?from&to&studentId
+
+GET  /api/campus                 buildings, rooms, weekday schedule (public)
+POST /api/signups                { name, locationType, building, room, roomDetail, isCustomLocation }
+GET/PATCH/DELETE /api/admin/signups[/:id]   PATCH { overrideDay, overrideGroup, building }
+GET  /api/admin/signups/export.csv
 ```
 
 Punches are idempotent via `clientEventId`, so the kiosk's offline retry queue

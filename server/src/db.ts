@@ -39,6 +39,20 @@ db.exec(`
     client_event_id TEXT PRIMARY KEY,
     processed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  -- Staff recycling-bin sign-ups (see server/src/campus.ts for buildings)
+  CREATE TABLE IF NOT EXISTS signups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    location_type TEXT NOT NULL CHECK (location_type IN ('classroom','office')),
+    building TEXT NOT NULL,
+    room TEXT NOT NULL,
+    room_detail TEXT NOT NULL DEFAULT '',
+    is_custom INTEGER NOT NULL DEFAULT 0,
+    override_group TEXT,
+    override_day TEXT,
+    submitted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
 `);
 
 // Example roster for a fresh install — replace with your own students on the

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import adminSignups from './adminSignups.js';
 import {
   checkPassword,
   clearedCookie,
@@ -41,6 +42,8 @@ router.get('/me', (req, res) => {
 });
 
 router.use(requireAdmin);
+
+router.use('/signups', adminSignups);
 
 /* ---------- students ---------- */
 

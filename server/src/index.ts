@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import kioskRoutes from './routes/kiosk.js';
 import adminRoutes from './routes/admin.js';
+import signupRoutes from './routes/signups.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -13,6 +14,7 @@ app.get('/api/health', (_req, res) => {
 });
 app.use('/api/kiosk', kioskRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', signupRoutes);
 
 // Serve the built React app; SPA fallback for client-side routes like /admin.
 const webDist = path.resolve(import.meta.dirname, '../../web/dist');

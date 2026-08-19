@@ -36,6 +36,39 @@ export type PunchResult = {
   minutes?: number;
 };
 
+export type Day = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+export type Group = 'A' | 'B';
+
+export type Building = {
+  key: string;
+  name: string;
+  group: Group;
+  day: Day;
+  rooms: string[];
+};
+
+export type Campus = {
+  days: Day[];
+  home: { building: string; room: string };
+  buildings: Building[];
+};
+
+export type Signup = {
+  id: number;
+  name: string;
+  locationType: 'classroom' | 'office';
+  building: string;
+  buildingName: string;
+  room: string;
+  roomDetail: string;
+  isCustom: boolean;
+  overrideGroup: Group | null;
+  overrideDay: Day | null;
+  submittedAt: string;
+  day: Day | null;
+  group: Group | null;
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -120,4 +153,31 @@ export const api = {
 
   exportCsvUrl: (params: { from?: string; to?: string; studentId?: string }) =>
     `/api/admin/export.csv${qs(params)}`,
+
+  /* ---- recycling sign-ups ---- */
+  campus: () => request<Campus>('/api/campus'),
+  submitSignup: (body: {
+    name: string;
+    locationType: 'classroom' | 'office';
+    building: string;
+    room: string;
+    roomDetail: string;
+    isCustomLocation: boolean;
+  }) =>
+    request<{ id: number; building: string; room: string }>('/api/signups', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  signups: () => request<{ signups: Signup[] }>('/api/admin/signups'),
+  updateSignup: (
+    id: number,
+    body: { overrideDay?: Day | null; overrideGroup?: Group | null; building?: string }
+  ) =>
+    request<{ ok: boolean }>(`/api/admin/signups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteSignup: (id: number) =>
+    request<{ ok: boolean }>(`/api/admin/signups/${id}`, { method: 'DELETE' }),
+  signupsCsvUrl: '/api/admin/signups/export.csv',
 };

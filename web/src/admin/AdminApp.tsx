@@ -4,8 +4,9 @@ import { api } from '../lib/api';
 import Timesheet from './Timesheet';
 import Roster from './Roster';
 import Reports from './Reports';
+import Signups from './Signups';
 
-type Tab = 'timesheet' | 'reports' | 'roster';
+type Tab = 'timesheet' | 'reports' | 'roster' | 'signups';
 
 export default function AdminApp() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -44,6 +45,9 @@ export default function AdminApp() {
           <TabButton active={tab === 'roster'} onClick={() => setTab('roster')}>
             Students
           </TabButton>
+          <TabButton active={tab === 'signups'} onClick={() => setTab('signups')}>
+            Pickup Routes
+          </TabButton>
         </nav>
         <Link
           to="/"
@@ -59,7 +63,15 @@ export default function AdminApp() {
           Log out
         </button>
       </header>
-      {tab === 'timesheet' ? <Timesheet /> : tab === 'reports' ? <Reports /> : <Roster />}
+      {tab === 'timesheet' ? (
+        <Timesheet />
+      ) : tab === 'reports' ? (
+        <Reports />
+      ) : tab === 'signups' ? (
+        <Signups />
+      ) : (
+        <Roster />
+      )}
     </Shell>
   );
 }
