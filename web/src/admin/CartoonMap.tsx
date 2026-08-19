@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, bLabel, rLabel, type Campus, type Day, type Group, type Signup } from '../lib/api';
 import {
+  AERIAL_CREDIT,
+  AERIAL_SRC,
   BUILDINGS as LAYOUTS,
+  EXTRAS,
   HOME,
   LANDMARKS,
   MAP_H,
   MAP_W,
   SIDEWALKS,
-  TREES,
   buildingParts,
   center,
   cumulative,
@@ -31,7 +33,7 @@ import {
 
 const GROUP_COLOR: Record<Group, string> = { A: '#C2255C', B: '#1565C0' };
 const GROUP_NAME: Record<Group, string> = { A: 'Group A', B: 'Group B' };
-const GROUP_SUB: Record<Group, string> = { A: 'Slow walkers', B: 'Standard route' };
+const GROUP_SUB: Record<Group, string> = { A: 'Close to home', B: 'Around campus' };
 const HOME_COLOR = '#F9A825';
 const QUIET_FILL = '#C3DCB2';
 const QUIET_INK = '#63805A';
@@ -92,15 +94,38 @@ export function CartoonMap({
   const layoutByKey = useMemo(() => new Map(LAYOUTS.map((l) => [l.key, l])), []);
   const infoByKey = useMemo(() => new Map(campus.buildings.map((b) => [b.key, b])), [campus]);
 
-  /** The walk: out the door, down each hallway, into every classroom with a bin. */
+  /**
+   * The walk: down the hallway to each classroom with a bin, out to the next
+   * building, and home. Tracks which hallway we're standing in so the group
+   * never steps outside just to come back in — starting in DA4 means the
+   * D Annex rooms are visited before ever touching the sidewalk.
+   */
   const plan = useMemo(() => {
     if (view === 'week') return null;
     const todays = campus.buildings.filter((b) => b.day === view && b.group === group);
-    const pts: Pt[] = [...HOME.path];
-    const stops: Stop[] = [];
+    const home = layoutByKey.get(HOME.building);
+    const homeTile = home ? roomRect(home, HOME.room) : null;
+    if (!home || !homeTile) return null;
+    const homeSpine = partSpine({ rect: home.rect, rows: home.rows }, home.entrance, home.walkway, home.spine);
+    const homeStart = roomDoor(homeTile, homeSpine);
+
+    const pts: Pt[] = [homeStart.door, homeStart.hall];
     const marks: Array<{ index: number; stop: Omit<Stop, 'at'> }> = [];
-    let cur = HOME.door;
     const visited: string[] = [];
+    // Where we are: on a hallway spine (inside), or on the sidewalk (outside).
+    let cur: Pt = homeStart.hall;
+    let inside: { key: string; spine: ReturnType<typeof partSpine>; entrance: Pt; door?: Pt } | null =
+      { key: `${HOME.building}#0`, spine: homeSpine, entrance: home.entrance, door: home.door };
+
+    const stepOutside = () => {
+      if (!inside) return;
+      const exit = spineEntry(inside.spine, inside.door ?? inside.entrance);
+      pts.push(exit);
+      if (inside.door) pts.push(inside.door);
+      pts.push(inside.entrance);
+      cur = inside.entrance;
+      inside = null;
+    };
 
     for (const b of todays) {
       const l = layoutByKey.get(b.key);
@@ -109,40 +134,67 @@ export function CartoonMap({
       if (!mine.length) continue;
       visited.push(b.key);
 
-      pts.push(...routeAlongSidewalks(cur, l.entrance).slice(1));
-      cur = l.entrance;
-
-      for (const part of buildingParts(l)) {
+      const parts = buildingParts(l);
+      let touchedBuilding = false;
+      parts.forEach((part, pi) => {
+        const id = `${b.key}#${pi}`;
         const tiles = layoutTiles(part.rect, part.rows).filter((t) => 'room' in t) as Array<{ room: string; rect: Rect }>;
         const here = mine.filter((s) => !s.isCustom && tiles.some((t) => t.room === s.room));
-        if (!here.length) continue;
-        const spine = partSpine(part, l.entrance, l.walkway);
-        const entry = spineEntry(spine, cur);
-        pts.push(entry);
-        const doors = here
-          .map((s) => ({ s, ...roomDoor(tiles.find((t) => t.room === s.room)!.rect, spine) }))
-          .sort((a, z) => Math.hypot(a.hall.x - entry.x, a.hall.y - entry.y) - Math.hypot(z.hall.x - entry.x, z.hall.y - entry.y));
-        for (const d of doors) {
+        if (!here.length) return;
+        touchedBuilding = true;
+
+        if (inside?.key !== id) {
+          stepOutside();
+          pts.push(...routeAlongSidewalks(cur, l.entrance).slice(1));
+          cur = l.entrance;
+          const spine = partSpine(part, l.entrance, l.walkway, pi === 0 ? l.spine : undefined);
+          if (pi === 0 && l.door) pts.push(l.door);
+          const entry = spineEntry(spine, pi === 0 && l.door ? l.door : cur);
+          pts.push(entry);
+          cur = entry;
+          inside = { key: id, spine, entrance: l.entrance, door: pi === 0 ? l.door : undefined };
+        }
+
+        // Nearest classroom first, from wherever we're standing in the hall.
+        const remaining = here.map((s) => ({ s, ...roomDoor(tiles.find((t) => t.room === s.room)!.rect, inside!.spine) }));
+        while (remaining.length) {
+          remaining.sort((a, z) => Math.hypot(a.hall.x - cur.x, a.hall.y - cur.y) - Math.hypot(z.hall.x - cur.x, z.hall.y - cur.y));
+          const d = remaining.shift()!;
           pts.push(d.hall, d.door);
           marks.push({ index: pts.length - 1, stop: { signup: d.s, buildingKey: b.key, label: d.s.roomLabel, who: d.s.name, door: d.door } });
           pts.push(d.hall);
+          cur = d.hall;
         }
-        pts.push(entry);
-      }
+      });
 
-      pts.push(l.entrance);
-      for (const c of mine.filter((s) => s.isCustom)) {
-        marks.push({ index: pts.length - 1, stop: { signup: c, buildingKey: b.key, label: c.roomLabel, who: c.name, door: l.entrance } });
+      // Custom locations ("Other") are met at the building's door.
+      const customs = mine.filter((s) => s.isCustom);
+      if (customs.length) {
+        if (!touchedBuilding || inside) {
+          stepOutside();
+          pts.push(...routeAlongSidewalks(cur, l.entrance).slice(1));
+          cur = l.entrance;
+        }
+        for (const c of customs) {
+          marks.push({ index: pts.length - 1, stop: { signup: c, buildingKey: b.key, label: c.roomLabel, who: c.name, door: l.entrance } });
+        }
       }
-      cur = l.entrance;
     }
 
     if (!visited.length) return { pts: [], stops: [], total: 0, visited };
-    pts.push(...routeAlongSidewalks(cur, HOME.door).slice(1));
-    pts.push(...[...HOME.path].reverse().slice(1));
+
+    // Home: if we're still in the D Annex hall, just walk back to the room.
+    if (inside?.key === `${HOME.building}#0`) {
+      pts.push(homeStart.hall, homeStart.door);
+    } else {
+      stepOutside();
+      pts.push(...routeAlongSidewalks(cur, home.entrance).slice(1));
+      if (home.door) pts.push(home.door);
+      pts.push(spineEntry(homeSpine, home.door ?? home.entrance), homeStart.hall, homeStart.door);
+    }
 
     const cum = cumulative(pts);
-    for (const m of marks) stops.push({ ...m.stop, at: cum[m.index] });
+    const stops: Stop[] = marks.map((m) => ({ ...m.stop, at: cum[m.index] }));
     return { pts, stops, total: cum[cum.length - 1], visited };
   }, [campus, view, group, signups, layoutByKey]);
 
@@ -247,20 +299,33 @@ export function CartoonMap({
       <div className="relative rounded-3xl overflow-hidden border-4 border-white shadow-md" style={{ background: '#A8D68A' }}>
         <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="w-full h-auto block select-none" role="img"
           aria-label={view === 'week' ? 'Campus map' : `${view} ${GROUP_NAME[group]} walking route`}>
-          <rect x={0} y={0} width={MAP_W} height={MAP_H} fill="#A8D68A" />
+          {/* The real campus, calmed down so the overlays read */}
+          <image href={AERIAL_SRC} x={0} y={0} width={MAP_W} height={MAP_H} preserveAspectRatio="none" />
+          <rect x={0} y={0} width={MAP_W} height={MAP_H} fill="#F6F8F0" opacity={view === 'week' ? 0.28 : 0.42} />
 
-          {LANDMARKS.map((lm, i) => <Landmark key={i} lm={lm} />)}
-
+          {/* Sidewalks (approximate the real walkways) */}
           {SIDEWALKS.map((s, i) => (
-            <line key={i} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#F1E7CC" strokeWidth={40} strokeLinecap="round" />
+            <line key={i} x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y} stroke="#F3E9CF" strokeWidth={30} strokeLinecap="round" opacity={0.85} />
           ))}
 
-          {TREES.filter((_, i) => i % 3 === 0).map((tr, i) => (
+          {/* Other buildings, just for orientation */}
+          {EXTRAS.map((e, i) => (
             <g key={i} pointerEvents="none">
-              <circle cx={tr.x} cy={tr.y} r={(tr.r ?? 22) * 0.9} fill="#63AC4E" />
-              <circle cx={tr.x - 6} cy={tr.y - 6} r={(tr.r ?? 22) * 0.5} fill="#7BC565" />
+              <rect x={e.rect.x} y={e.rect.y} width={e.rect.w} height={e.rect.h} rx={16} fill={QUIET_FILL} opacity={0.9} />
+              {e.label && <TileText label={e.label} rect={e.rect} fill={QUIET_INK} max={22} weight={800} />}
             </g>
           ))}
+
+          {/* Places the students know */}
+          {LANDMARKS.map((lm, i) => {
+            const w = lm.label.length * 13 + 30;
+            return (
+              <g key={i} pointerEvents="none">
+                <rect x={lm.at.x - w / 2} y={lm.at.y - 17} width={w} height={34} rx={17} fill="#FFFFFF" opacity={0.9} />
+                <text x={lm.at.x} y={lm.at.y + 7} textAnchor="middle" fontSize={21} fontWeight={800} fill="#3D5A32">{lm.label}</text>
+              </g>
+            );
+          })}
 
           {/* Buildings */}
           {LAYOUTS.map((l) => {
@@ -314,27 +379,23 @@ export function CartoonMap({
                   </g>
                 )}
 
-                {/* Name plate */}
-                {(() => {
+                {/* Name plate — hung on whichever side has room; carries the day in week view */}
+                {l.nameplate !== 'none' && (() => {
+                  const tag = view === 'week' && info ? ` · ${info.day.slice(0, 3)} ${info.group}` : '';
+                  const label = name + tag;
                   const h = lit ? 44 : 30;
-                  const w = Math.min(l.rect.w + 40, name.length * (lit ? 18 : 12) + 40);
-                  const x = l.rect.x + l.rect.w / 2 - w / 2;
+                  const w = label.length * (lit ? 13.5 : 10) + 34;
+                  const side = l.nameplate ?? 'top';
+                  const cx = l.rect.x + l.rect.w / 2, cy = l.rect.y + l.rect.h / 2;
+                  const x = side === 'left' ? l.rect.x - 10 - w : side === 'right' ? l.rect.x + l.rect.w + 10 : cx - w / 2;
+                  const y = side === 'top' ? l.rect.y - h / 2 - 6 : side === 'bottom' ? l.rect.y + l.rect.h - h / 2 + 6 : cy - h / 2;
                   return (
                     <g pointerEvents="none">
-                      <rect x={x} y={l.rect.y - h / 2 - 6} width={w} height={h} rx={h / 2} fill={lit ? '#FFFFFF' : '#D3E5C6'} stroke={lit ? gcolor : 'none'} strokeWidth={5} />
-                      <TileText label={name} rect={{ x, y: l.rect.y - h / 2 - 6, w, h }} fill={lit ? '#1A2733' : QUIET_INK} max={lit ? 28 : 18} weight={900} />
+                      <rect x={x} y={y} width={w} height={h} rx={h / 2} fill={lit ? '#FFFFFF' : '#E4EEDB'} stroke={lit ? gcolor : 'none'} strokeWidth={5} opacity={lit ? 1 : 0.95} />
+                      <TileText label={label} rect={{ x, y, w, h }} fill={lit ? '#1A2733' : QUIET_INK} max={lit ? 27 : 18} weight={900} />
                     </g>
                   );
                 })()}
-
-                {view === 'week' && info && (
-                  <g pointerEvents="none">
-                    <rect x={l.rect.x + l.rect.w - 104} y={l.rect.y + l.rect.h - 18} width={100} height={40} rx={20} fill={GROUP_COLOR[info.group]} stroke="white" strokeWidth={4} />
-                    <text x={l.rect.x + l.rect.w - 54} y={l.rect.y + l.rect.h + 10} textAnchor="middle" fontSize={22} fontWeight={900} fill="white">
-                      {info.day.slice(0, 3)} · {info.group}
-                    </text>
-                  </g>
-                )}
               </g>
             );
           })}
@@ -441,81 +502,10 @@ export function CartoonMap({
 
       <p className="text-sm text-rtc-gray font-bold">
         Double-click any building or room to rename it.
+        <span className="font-normal opacity-70"> · {AERIAL_CREDIT}</span>
       </p>
     </div>
   );
-}
-
-function Landmark({ lm }: { lm: { kind: string; rect: { x: number; y: number; w: number; h: number }; label: string } }) {
-  const { x, y, w, h } = lm.rect;
-  const cx = x + w / 2, cy = y + h / 2;
-  const cap = (fill: string, ink = '#3D5A32') => (
-    <text x={cx} y={y + h - 12} textAnchor="middle" fontSize={22} fontWeight={900} fill={ink} stroke={fill} strokeWidth={5} paintOrder="stroke">
-      {lm.label}
-    </text>
-  );
-  switch (lm.kind) {
-    case 'track':
-      return (
-        <g pointerEvents="none">
-          <rect x={x} y={y} width={w} height={h} rx={h / 2} fill="#C97B54" />
-          <rect x={x + 22} y={y + 22} width={w - 44} height={h - 44} rx={(h - 44) / 2} fill="#7CC061" />
-          {cap('#7CC061')}
-        </g>
-      );
-    case 'diamond':
-      return (
-        <g pointerEvents="none">
-          <path d={`M${x + 12},${y + h - 12} L${cx},${y + 16} L${x + w - 12},${y + h - 12} Z`} fill="#7CC061" />
-          <path d={`M${x + 60},${y + h - 40} L${cx},${y + 70} L${x + w - 60},${y + h - 40} Z`} fill="#D6A16B" />
-          {cap('#7CC061')}
-        </g>
-      );
-    case 'tennis':
-      return (
-        <g pointerEvents="none">
-          <rect x={x} y={y} width={w} height={h} rx={14} fill="#4E8FC7" />
-          {[0.33, 0.66].map((f) => <line key={f} x1={x + w * f} y1={y + 8} x2={x + w * f} y2={y + h - 8} stroke="white" strokeWidth={3} />)}
-          <line x1={x + 8} y1={cy} x2={x + w - 8} y2={cy} stroke="white" strokeWidth={3} />
-          {cap('#4E8FC7', '#FFFFFF')}
-        </g>
-      );
-    case 'pool':
-      return (
-        <g pointerEvents="none">
-          <rect x={x} y={y} width={w} height={h} rx={16} fill="#5FB4E5" stroke="#E9F3F8" strokeWidth={6} />
-          {cap('#5FB4E5', '#FFFFFF')}
-        </g>
-      );
-    case 'parking':
-      return (
-        <g pointerEvents="none">
-          <rect x={x} y={y} width={w} height={h} rx={14} fill="#9AA5A0" />
-          {Array.from({ length: Math.max(2, Math.floor(w / 60)) }, (_, i) => (
-            <line key={i} x1={x + 20 + i * 58} y1={y + 12} x2={x + 20 + i * 58} y2={y + h - 12} stroke="#E6EAE8" strokeWidth={4} />
-          ))}
-          {cap('#9AA5A0', '#FFFFFF')}
-        </g>
-      );
-    case 'amphitheatre':
-      return (
-        <g pointerEvents="none">
-          <rect x={x} y={y} width={w} height={h} rx={18} fill="#C9BBA0" />
-          {[0.25, 0.45, 0.65].map((f) => (
-            <path key={f} d={`M${x + 14},${y + h * f} Q${cx},${y + h * (f - 0.2)} ${x + w - 14},${y + h * f}`} fill="none" stroke="#EFE6D2" strokeWidth={7} />
-          ))}
-          {cap('#C9BBA0')}
-        </g>
-      );
-    case 'quad':
-    default:
-      return (
-        <g pointerEvents="none">
-          <rect x={x} y={y} width={w} height={h} rx={40} fill="#98CC78" />
-          {cap('#98CC78')}
-        </g>
-      );
-  }
 }
 
 function Chip({ color, ink, num, label, sub, active, done, onClick }: {

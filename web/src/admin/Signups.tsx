@@ -78,8 +78,8 @@ export default function Signups() {
       {/* Top bar: stats + actions */}
       <div className="grid grid-cols-3 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto] gap-3 items-stretch">
         <Stat label="Total sign-ups" value={stats.total} />
-        <Stat label="Group A · slow walkers" value={stats.a} tone="A" />
-        <Stat label="Group B · standard route" value={stats.b} tone="B" />
+        <Stat label="Group A" value={stats.a} tone="A" />
+        <Stat label="Group B" value={stats.b} tone="B" />
         <div className="col-span-3 lg:col-span-1 bg-white rounded-2xl shadow-sm p-3 flex flex-wrap lg:flex-col gap-2 justify-center">
           <button
             type="button"
@@ -234,8 +234,8 @@ export default function Signups() {
                       title={s.overrideGroup ? 'Manually set' : 'Automatic from building'}
                     >
                       <option value="">{s.group ? `${s.group} (auto)` : '— none —'}</option>
-                      <option value="A">A · slow walkers</option>
-                      <option value="B">B · standard</option>
+                      <option value="A">Group A</option>
+                      <option value="B">Group B</option>
                     </select>
                   </td>
                   <td className="p-3 text-rtc-gray whitespace-nowrap">

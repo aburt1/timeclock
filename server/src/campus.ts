@@ -2,8 +2,9 @@
  * Campus layout for the recycling pickup program.
  *
  * Buildings ("zones") are the unit of scheduling: each belongs to Group A
- * (slow walkers, close to home classroom DA4) or Group B (standard route),
- * and is collected on exactly one weekday. Room labels are room codes or
+ * (the buildings nearest home classroom DA4) or Group B (the rest of
+ * campus), and is collected on exactly one weekday. Which students go in
+ * which group is the teacher's call and is never shown in the app. Room labels are room codes or
  * plain descriptions only — never staff names (they go stale).
  *
  * Built from the North High 2026/27 room map. Day/group assignments are
@@ -27,7 +28,7 @@ export type Building = {
 };
 
 export const BUILDINGS: Building[] = [
-  /* ---------- Group A — slow walkers, closest to DA4 ---------- */
+  /* ---------- Group A — closest to DA4 ---------- */
   {
     key: 'd-annex',
     name: 'D Annex',
@@ -72,7 +73,7 @@ export const BUILDINGS: Building[] = [
     ],
   },
 
-  /* ---------- Group B — standard route, rest of campus ---------- */
+  /* ---------- Group B — rest of campus ---------- */
   {
     key: 'learning-center',
     name: 'Learning Center / College & Career Center',
