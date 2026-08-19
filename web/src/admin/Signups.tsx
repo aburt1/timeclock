@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, type Campus, type Day, type Group, type Signup } from '../lib/api';
-import { CampusMap } from './CampusMap';
+import { api, bLabel, type Campus, type Day, type Group, type Signup } from '../lib/api';
+import { CartoonMap } from './CartoonMap';
 
 const GROUP_TEXT: Record<Group, string> = { A: 'text-rtc-green-dark', B: 'text-blue-700' };
 const GROUP_BG: Record<Group, string> = { A: 'bg-green-50 border-green-200', B: 'bg-blue-50 border-blue-200' };
@@ -55,7 +55,7 @@ export default function Signups() {
   }
 
   async function remove(s: Signup) {
-    if (!window.confirm(`Remove ${s.name} (${s.room})? This can't be undone.`)) return;
+    if (!window.confirm(`Remove ${s.name} (${s.roomLabel})? This can't be undone.`)) return;
     await api.deleteSignup(s.id);
     load();
   }
@@ -117,20 +117,24 @@ export default function Signups() {
         <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-sm font-bold text-amber-800">
           ⚠ {stats.unscheduled.length} sign-up{stats.unscheduled.length === 1 ? '' : 's'} can't be
           placed on the schedule — set a Day and Group in the table below:{' '}
-          {stats.unscheduled.map((s) => `${s.name} (${s.room})`).join(', ')}
+          {stats.unscheduled.map((s) => `${s.name} (${s.roomLabel})`).join(', ')}
         </div>
       )}
 
       {/* Map */}
       <section className="bg-white rounded-2xl shadow-sm p-4">
         <h2 className="font-black text-rtc-ink mb-3">Pickup routes</h2>
-        <CampusMap
+        <CartoonMap
           campus={campus}
           signups={signups}
           view={view}
           onViewChange={setView}
           selected={selected}
           onSelect={setSelected}
+          onLabelsChange={(labels) => {
+            setCampus({ ...campus, labels });
+            load();
+          }}
         />
       </section>
 
@@ -149,7 +153,7 @@ export default function Signups() {
         <div className="flex items-center gap-3 p-4 pb-2">
           <h2 className="font-black text-rtc-ink">
             {selected
-              ? `Sign-ups in ${campus.buildings.find((b) => b.key === selected)?.name ?? ''}`
+              ? `Sign-ups in ${bLabel(campus, selected)}`
               : 'All sign-ups'}
           </h2>
           {selected && (
@@ -189,7 +193,7 @@ export default function Signups() {
                   <td className="p-3 font-bold whitespace-nowrap">{s.name}</td>
                   <td className="p-3">
                     <div className="font-bold">
-                      {s.room}
+                      {s.roomLabel}
                       {s.roomDetail && <span className="text-rtc-gray font-normal"> — {s.roomDetail}</span>}
                     </div>
                     <div className="text-xs text-rtc-gray">
@@ -275,7 +279,7 @@ function DayColumn({ day, campus, signups }: { day: Day; campus: Campus; signups
         return (
           <div key={g} className={`rounded-xl border-2 p-2.5 ${GROUP_BG[g]}`}>
             <div className={`text-xs font-black ${GROUP_TEXT[g]}`}>
-              Group {g} · {buildings.map((b) => b.name).join(' + ') || '—'}
+              Group {g} · {buildings.map((b) => bLabel(campus, b)).join(' + ') || '—'}
             </div>
             {people.length === 0 ? (
               <div className="text-xs text-rtc-gray font-bold mt-1">No sign-ups yet</div>
@@ -283,7 +287,7 @@ function DayColumn({ day, campus, signups }: { day: Day; campus: Campus; signups
               <ul className="mt-1.5 flex flex-col gap-0.5">
                 {people.map((s) => (
                   <li key={s.id} className="text-sm leading-tight">
-                    <span className="font-bold">{s.room}</span>
+                    <span className="font-bold">{s.roomLabel}</span>
                     <span className="text-rtc-gray"> · {s.name}</span>
                   </li>
                 ))}

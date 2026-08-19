@@ -51,11 +51,13 @@ audit trails, this is the wrong tool on purpose.
 - **Admin** (`/admin`) — timesheet with per-student totals, inline time
   editing, flags for anything odd ("● still in", "⚠ missing" a punch), a
   Reports tab (hours by student, hours by day, date-range presets), roster
-  management, and a **Pickup Routes** tab: an interactive campus map showing
-  each day's Group A / Group B buildings and walking routes from the home
-  classroom, the Monday–Friday schedule with every signed-up room, and a
-  table where any sign-up's day or group can be overridden or removed.
-  One-click CSV export everywhere.
+  management, and a **Pickup Routes** tab: an illustrated, cartoon-style
+  campus map (drawn in SVG, no map provider) showing each day's Group A /
+  Group B buildings, walking routes along the sidewalks from the home
+  classroom, every signed-up person at their room, the Monday–Friday
+  schedule, and a table where any sign-up's day or group can be overridden
+  or removed. Double-click any building or room on the map to rename it —
+  the new name shows up everywhere. One-click CSV export everywhere.
 - **Storage** — a single SQLite file at `/data/timeclock.db`. Back it up by
   copying one file, or use **Export all** in the admin page.
 
@@ -76,9 +78,9 @@ and to exactly one weekday, matching the 6th-period collection routine:
 Assignments are estimates from the campus map, not measured distances — the
 admin can override any individual sign-up's day or group, and that override
 always wins. Buildings, rooms, and this table live in one file,
-`server/src/campus.ts`; the map overlay coordinates are in
-`web/src/lib/campusMap.ts`. Room labels are codes only, never staff names,
-so nothing goes stale when people move.
+`server/src/campus.ts`; the illustrated map's footprints, room tiles, and
+sidewalk network are in `web/src/lib/campusLayout.ts`. Room labels are codes
+only, never staff names, so nothing goes stale when people move.
 
 A fresh install seeds nine example students (Alex, Bailey, Casey, …) so the
 kiosk works immediately — rename them to your own roster on the admin page.
@@ -142,6 +144,7 @@ GET  /api/campus                 buildings, rooms, weekday schedule (public)
 POST /api/signups                { name, locationType, building, room, roomDetail, isCustomLocation }
 GET/PATCH/DELETE /api/admin/signups[/:id]   PATCH { overrideDay, overrideGroup, building }
 GET  /api/admin/signups/export.csv
+PUT  /api/admin/signups/labels   { key: "b:<building>" | "r:<building>|<room>", label }
 ```
 
 Punches are idempotent via `clientEventId`, so the kiosk's offline retry queue

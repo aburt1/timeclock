@@ -1,8 +1,19 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { getBuilding, isDay, isGroup, resolveSchedule } from '../campus.js';
+import { buildingLabel, getLabels, isValidLabelKey, roomLabel, setLabel } from '../labels.js';
 
 const router = Router();
+
+/* ---------- map label overrides (double-click-to-rename) ---------- */
+
+router.put('/labels', (req, res) => {
+  const key = String(req.body?.key ?? '');
+  const label = String(req.body?.label ?? '').trim().slice(0, 60);
+  if (!isValidLabelKey(key)) return void res.status(400).json({ error: 'unknown map spot' });
+  setLabel(key, label);
+  res.json({ ok: true, labels: getLabels() });
+});
 
 type Row = {
   id: number;
@@ -28,13 +39,15 @@ function allSignups() {
     )
     .all() as Row[];
 
+  const labels = getLabels();
   return rows.map((r) => {
     const b = getBuilding(r.building);
     const { day, group } = resolveSchedule(r.building, r.overrideDay, r.overrideGroup);
     return {
       ...r,
       isCustom: !!r.isCustom,
-      buildingName: b?.name ?? r.building,
+      buildingName: b ? buildingLabel(b.key, labels) : r.building,
+      roomLabel: r.isCustom ? r.room : roomLabel(r.building, r.room, labels),
       day,
       group,
     };
@@ -86,7 +99,7 @@ router.get('/export.csv', (_req, res) => {
         s.name,
         s.locationType,
         s.buildingName,
-        s.room,
+        s.roomLabel,
         s.roomDetail,
         s.day ?? '',
         s.group ?? '',

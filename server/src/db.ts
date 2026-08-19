@@ -53,6 +53,12 @@ db.exec(`
     override_day TEXT,
     submitted_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  -- Display-name overrides for map spots: key is "b:<building>" or "r:<building>|<room>"
+  CREATE TABLE IF NOT EXISTS map_labels (
+    key TEXT PRIMARY KEY,
+    label TEXT NOT NULL
+  );
 `);
 
 // Example roster for a fresh install — replace with your own students on the

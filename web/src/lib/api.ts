@@ -51,7 +51,17 @@ export type Campus = {
   days: Day[];
   home: { building: string; room: string };
   buildings: Building[];
+  /** Display-name overrides keyed "b:<building>" or "r:<building>|<room>". */
+  labels: Record<string, string>;
 };
+
+export const bLabel = (c: Campus, b: Building | string) => {
+  const key = typeof b === 'string' ? b : b.key;
+  const base = typeof b === 'string' ? c.buildings.find((x) => x.key === b)?.name ?? b : b.name;
+  return c.labels[`b:${key}`] ?? base;
+};
+export const rLabel = (c: Campus, buildingKey: string, room: string) =>
+  c.labels[`r:${buildingKey}|${room}`] ?? room;
 
 export type Signup = {
   id: number;
@@ -60,6 +70,7 @@ export type Signup = {
   building: string;
   buildingName: string;
   room: string;
+  roomLabel: string;
   roomDetail: string;
   isCustom: boolean;
   overrideGroup: Group | null;
@@ -180,4 +191,9 @@ export const api = {
   deleteSignup: (id: number) =>
     request<{ ok: boolean }>(`/api/admin/signups/${id}`, { method: 'DELETE' }),
   signupsCsvUrl: '/api/admin/signups/export.csv',
+  setLabel: (key: string, label: string) =>
+    request<{ ok: boolean; labels: Record<string, string> }>('/api/admin/signups/labels', {
+      method: 'PUT',
+      body: JSON.stringify({ key, label }),
+    }),
 };

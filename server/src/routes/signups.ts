@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { BUILDINGS, DAYS, HOME_BUILDING, HOME_ROOM, getBuilding } from '../campus.js';
+import { buildingLabel, getLabels, roomLabel } from '../labels.js';
 
 const router = Router();
 
-/** Public: buildings, rooms, and the weekday schedule (for the sign-up form). */
+/** Public: buildings, rooms, weekday schedule, and display-name overrides. */
 router.get('/campus', (_req, res) => {
   res.json({
     days: DAYS,
     home: { building: HOME_BUILDING, room: HOME_ROOM },
     buildings: BUILDINGS,
+    labels: getLabels(),
   });
 });
 
@@ -49,10 +51,11 @@ router.post('/signups', (req, res) => {
     )
     .run(name, locationType, building.key, room, roomDetail, isCustom ? 1 : 0);
 
+  const labels = getLabels();
   res.status(201).json({
     id: Number(lastInsertRowid),
-    building: building.name,
-    room,
+    building: buildingLabel(building.key, labels),
+    room: isCustom ? room : roomLabel(building.key, room, labels),
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Campus } from '../lib/api';
+import { api, bLabel, rLabel, type Campus } from '../lib/api';
 
 /** Shown above the form. Edit freely — plain text, one paragraph per line. */
 const PROGRAM_DESCRIPTION = [
@@ -176,10 +176,10 @@ export default function SignupPage() {
               >
                 <option value="">Choose your room…</option>
                 {campus.buildings.map((b) => (
-                  <optgroup key={b.key} label={b.name}>
+                  <optgroup key={b.key} label={bLabel(campus, b)}>
                     {b.rooms.map((r) => (
                       <option key={r} value={`${b.key}|${r}`}>
-                        {r}
+                        {rLabel(campus, b.key, r)}
                       </option>
                     ))}
                   </optgroup>
@@ -212,7 +212,7 @@ export default function SignupPage() {
                     <option value="">Pick the closest one…</option>
                     {campus.buildings.map((b) => (
                       <option key={b.key} value={b.key}>
-                        {b.name}
+                        {bLabel(campus, b)}
                       </option>
                     ))}
                   </select>
